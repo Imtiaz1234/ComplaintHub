@@ -79,7 +79,7 @@ Project_demo/
 ```bash
 cd backend
 npm install
-copy .env.example .env
+# create a .env file manually in the backend folder
 npm run dev
 ```
 
@@ -92,7 +92,7 @@ Open a second terminal:
 ```bash
 cd frontend
 npm install
-copy .env.example .env
+# (optional) create a .env file manually in the frontend folder if you want to override defaults
 npm run dev
 ```
 
