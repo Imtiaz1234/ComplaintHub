@@ -4,13 +4,15 @@ import {
   getAllComplaints,
   getComplaintStatusById,
   updateComplaintPriority,
-  updateComplaintStatus
+  updateComplaintStatus,
+  getSimilarComplaints
 } from "../controllers/complaintController.js";
 
 const router = Router();
 
 router.post("/", createComplaint);
 router.get("/", getAllComplaints);
+router.get("/search", getSimilarComplaints);
 router.get("/:complaintId/status", getComplaintStatusById);
 router.patch("/:complaintId/status", updateComplaintStatus);
 router.patch("/:complaintId/priority", updateComplaintPriority);
