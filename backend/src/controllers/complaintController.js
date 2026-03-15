@@ -113,3 +113,25 @@ export const updateComplaintPriority = async (req, res) => {
     return res.status(500).json({ message: "Failed to update complaint priority.", error: error.message });
   }
 };
+
+export const getSimilarComplaints = async (req, res) => {
+  try {
+    const { q } = req.query;
+
+    if (!q || q.trim().length < 3) {
+      return res.status(200).json([]);
+    }
+
+    const similarComplaints = await Complaint.find(
+      { $text: { $search: q } },
+      { score: { $meta: "textScore" } }
+    )
+      .sort({ score: { $meta: "textScore" } })
+      .limit(5)
+      .select('complaintId title description status priority createdAt');
+
+    return res.status(200).json(similarComplaints);
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to search complaints.", error: error.message });
+  }
+};

@@ -43,3 +43,6 @@ const complaintSchema = new mongoose.Schema(
 
 export const Complaint = mongoose.model("Complaint", complaintSchema);
 export { STATUS_VALUES, PRIORITY_VALUES };
+
+// Create text index for search
+complaintSchema.index({ title: 'text', description: 'text' });

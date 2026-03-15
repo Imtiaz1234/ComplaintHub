@@ -4,7 +4,8 @@ import {
   getAllComplaints,
   getComplaintStatus,
   updateComplaintPriority,
-  updateComplaintStatus
+  updateComplaintStatus,
+  searchComplaints
 } from "./api/complaintApi";
 
 const STATUS_VALUES = ["Pending", "Assigned", "In Progress", "Resolved", "Rejected"];
@@ -15,6 +16,7 @@ export default function App() {
   const [description, setDescription] = useState("");
   const [newComplaint, setNewComplaint] = useState(null);
   const [submitError, setSubmitError] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
 
   const [trackId, setTrackId] = useState("");
   const [trackedComplaint, setTrackedComplaint] = useState(null);
@@ -38,6 +40,33 @@ export default function App() {
   useEffect(() => {
     loadComplaints();
   }, []);
+
+  const debounce = (func, delay) => {
+    let timeoutId;
+    return (...args) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => func.apply(null, args), delay);
+    };
+  };
+
+  const searchSimilar = debounce(async (query) => {
+    if (query.trim().length < 3) {
+      setSuggestions([]);
+      return;
+    }
+    try {
+      const results = await searchComplaints(query);
+      setSuggestions(results);
+    } catch {
+      setSuggestions([]);
+    }
+  }, 500);
+
+  const handleTitleChange = (event) => {
+    const value = event.target.value;
+    setTitle(value);
+    searchSimilar(value);
+  };
 
   const handleCreate = async (event) => {
     event.preventDefault();
@@ -97,7 +126,7 @@ export default function App() {
         <h3>1) Submit Complaint</h3>
         <form onSubmit={handleCreate}>
           <label>Title</label>
-          <input value={title} onChange={(event) => setTitle(event.target.value)} required />
+          <input value={title} onChange={handleTitleChange} required />
 
           <label>Description</label>
           <textarea
@@ -109,6 +138,40 @@ export default function App() {
 
           <button type="submit">Create Complaint</button>
         </form>
+        {suggestions.length > 0 && (
+          <div className="suggestions">
+            <h4>Similar Complaints Found:</h4>
+            <p>Consider checking these existing complaints before submitting:</p>
+            <ul>
+              {suggestions.map((complaint) => (
+                <li key={complaint._id} className="suggestion-item">
+                  <strong>{complaint.complaintId}</strong>: {complaint.title}
+                  <br />
+                  <small>Status: {complaint.status} | Priority: {complaint.priority}</small>
+                  <br />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setTrackId(complaint.complaintId);
+                      setTrackedComplaint({
+                        complaintId: complaint.complaintId,
+                        title: complaint.title,
+                        status: complaint.status,
+                        priority: complaint.priority,
+                        updatedAt: complaint.createdAt
+                      });
+                      setTrackError("");
+                      // Scroll to tracking section
+                      document.querySelector('h3').scrollIntoView({ behavior: 'smooth' });
+                    }}
+                  >
+                    View Details
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         {submitError ? <div className="error">{submitError}</div> : null}
         {newComplaint ? (
           <div className="success">

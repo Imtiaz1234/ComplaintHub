@@ -72,3 +72,13 @@ export const getAllComplaints = async () => {
 
   return response.json();
 };
+
+export const searchComplaints = async (query) => {
+  const response = await fetch(`${API_BASE_URL}/complaints/search?q=${encodeURIComponent(query)}`);
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+};
