@@ -274,8 +274,6 @@ export default function App() {
       setCategoryReports([]);
     }
   };
-    }
-  };
 
   useEffect(() => {
     if (!currentUser) {
