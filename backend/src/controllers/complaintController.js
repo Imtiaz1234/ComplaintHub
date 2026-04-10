@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
-import { Complaint, PRIORITY_VALUES, STATUS_VALUES } from "../models/Complaint.js";
+import { Complaint, PRIORITY_VALUES, STATUS_VALUES, CATEGORY_VALUES } from "../models/Complaint.js";
 import { User } from "../models/User.js";
+import { Notification } from "../models/Notification.js";
 import { geocodeAddressToLatLng } from "../utils/geocode.js";
 
 const createComplaintId = () => {
@@ -25,7 +26,7 @@ const requireAdminUser = async (adminId) => {
 
 export const createComplaint = async (req, res) => {
   try {
-    const { title, description, citizenId, location, submissionPhoto } = req.body;
+    const { title, description, citizenId, location, submissionPhoto, category } = req.body;
 
     if (!title || !description || !citizenId) {
       return res.status(400).json({ message: "Title, description, and citizenId are required." });
@@ -106,7 +107,8 @@ export const createComplaint = async (req, res) => {
       priority: "Low",
       isArchived: false,
       location: locationPayload,
-      submissionPhoto: photo
+      submissionPhoto: photo,
+      category: category && CATEGORY_VALUES.includes(category) ? category : "Other"
     });
 
     return res.status(201).json(complaint);
@@ -133,6 +135,7 @@ export const getComplaintStatusById = async (req, res) => {
       description: complaint.description,
       status: complaint.status,
       priority: complaint.priority,
+      category: complaint.category,
       submittedBy: complaint.submittedBy,
       isArchived: complaint.isArchived,
       location: complaint.location,
@@ -140,6 +143,7 @@ export const getComplaintStatusById = async (req, res) => {
       assignedTo: complaint.assignedTo,
       workerTaskCompleted: complaint.workerTaskCompleted,
       progressLogs: complaint.progressLogs,
+      comments: complaint.comments,
       updatedAt: complaint.updatedAt,
       createdAt: complaint.createdAt
     });
@@ -179,6 +183,25 @@ export const updateComplaintStatus = async (req, res) => {
 
     if (!complaint) {
       return res.status(404).json({ message: "Complaint not found." });
+    }
+
+    // Notify the complaint owner about status change
+    await Notification.create({
+      userId: complaint.citizenId._id || complaint.citizenId,
+      complaintId: complaint.complaintId,
+      message: `Your complaint "${complaint.title}" status changed to ${status}.`,
+      type: "status_change"
+    });
+
+    // Notify assigned worker about status change
+    if (complaint.assignedTo) {
+      const assignedId = complaint.assignedTo._id || complaint.assignedTo;
+      await Notification.create({
+        userId: assignedId,
+        complaintId: complaint.complaintId,
+        message: `Complaint "${complaint.title}" status changed to ${status}.`,
+        type: "status_change"
+      });
     }
 
     return res.status(200).json(complaint);
@@ -324,6 +347,22 @@ export const assignComplaint = async (req, res) => {
       return res.status(404).json({ message: "Complaint not found." });
     }
 
+    // Notify the assigned worker/MP
+    await Notification.create({
+      userId: assignee._id,
+      complaintId: complaint.complaintId,
+      message: `You have been assigned to complaint "${complaint.title}".`,
+      type: "assignment"
+    });
+
+    // Notify the complaint owner
+    await Notification.create({
+      userId: complaint.citizenId._id || complaint.citizenId,
+      complaintId: complaint.complaintId,
+      message: `Your complaint "${complaint.title}" has been assigned to ${assignee.fullName}.`,
+      type: "assignment"
+    });
+
     return res.status(200).json(complaint);
   } catch (error) {
     return res.status(500).json({ message: "Failed to assign complaint.", error: error.message });
@@ -409,5 +448,236 @@ export const getSimilarComplaints = async (req, res) => {
     return res.status(200).json(similarComplaints);
   } catch (error) {
     return res.status(500).json({ message: "Failed to search complaints.", error: error.message });
+  }
+};
+
+export const filterComplaints = async (req, res) => {
+  try {
+    const { status, category, priority, area, dateFrom, dateTo, keyword } = req.query;
+    const filter = {};
+
+    if (status && STATUS_VALUES.includes(status)) {
+      filter.status = status;
+    }
+
+    if (category && CATEGORY_VALUES.includes(category)) {
+      filter.category = category;
+    }
+
+    if (priority && PRIORITY_VALUES.includes(priority)) {
+      filter.priority = priority;
+    }
+
+    if (area && area.trim().length >= 2) {
+      filter["location.address"] = { $regex: area.trim(), $options: "i" };
+    }
+
+    if (dateFrom || dateTo) {
+      filter.createdAt = {};
+
+      if (dateFrom) {
+        filter.createdAt.$gte = new Date(dateFrom);
+      }
+
+      if (dateTo) {
+        const endDate = new Date(dateTo);
+        endDate.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = endDate;
+      }
+    }
+
+    if (keyword && keyword.trim().length >= 2) {
+      filter.$or = [
+        { title: { $regex: keyword.trim(), $options: "i" } },
+        { description: { $regex: keyword.trim(), $options: "i" } }
+      ];
+    }
+
+    const complaints = await Complaint.find(filter)
+      .populate("citizenId", "fullName email phone role")
+      .populate("assignedTo", "fullName email phone role")
+      .sort({ createdAt: -1 });
+
+    return res.status(200).json(complaints);
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to filter complaints.", error: error.message });
+  }
+};
+
+export const addComment = async (req, res) => {
+  try {
+    const { complaintId } = req.params;
+    const { userId, text } = req.body;
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({ message: "A valid userId is required." });
+    }
+
+    if (!text || text.trim().length === 0) {
+      return res.status(400).json({ message: "Comment text is required." });
+    }
+
+    if (text.trim().length > 1000) {
+      return res.status(400).json({ message: "Comment must not exceed 1000 characters." });
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    const complaint = await Complaint.findOne({ complaintId });
+
+    if (!complaint) {
+      return res.status(404).json({ message: "Complaint not found." });
+    }
+
+    complaint.comments.push({
+      text: text.trim(),
+      authorId: user._id,
+      authorName: user.fullName,
+      authorRole: user.role
+    });
+
+    await complaint.save();
+
+    // Notify the complaint owner if the commenter is not the owner
+    if (complaint.citizenId.toString() !== userId) {
+      await Notification.create({
+        userId: complaint.citizenId,
+        complaintId: complaint.complaintId,
+        message: `${user.fullName} commented on your complaint "${complaint.title}".`,
+        type: "comment"
+      });
+    }
+
+    // Notify assigned worker if exists and is not the commenter
+    if (complaint.assignedTo && complaint.assignedTo.toString() !== userId) {
+      await Notification.create({
+        userId: complaint.assignedTo,
+        complaintId: complaint.complaintId,
+        message: `${user.fullName} commented on complaint "${complaint.title}".`,
+        type: "comment"
+      });
+    }
+
+    const populated = await Complaint.findById(complaint._id)
+      .populate("citizenId", "fullName email phone role")
+      .populate("assignedTo", "fullName email phone role");
+
+    return res.status(200).json(populated);
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to add comment.", error: error.message });
+  }
+};
+
+export const getComments = async (req, res) => {
+  try {
+    const { complaintId } = req.params;
+    const complaint = await Complaint.findOne({ complaintId }).lean();
+
+    if (!complaint) {
+      return res.status(404).json({ message: "Complaint not found." });
+    }
+
+    const sortedComments = (complaint.comments || []).sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
+
+    return res.status(200).json(sortedComments);
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to fetch comments.", error: error.message });
+  }
+};
+
+export const getCategoryReports = async (_req, res) => {
+  try {
+    const pipeline = [
+      {
+        $group: {
+          _id: "$category",
+          total: { $sum: 1 },
+          pending: { $sum: { $cond: [{ $eq: ["$status", "Pending"] }, 1, 0] } },
+          assigned: { $sum: { $cond: [{ $eq: ["$status", "Assigned"] }, 1, 0] } },
+          inProgress: { $sum: { $cond: [{ $eq: ["$status", "In Progress"] }, 1, 0] } },
+          resolved: { $sum: { $cond: [{ $eq: ["$status", "Resolved"] }, 1, 0] } },
+          rejected: { $sum: { $cond: [{ $eq: ["$status", "Rejected"] }, 1, 0] } }
+        }
+      },
+      { $sort: { total: -1 } }
+    ];
+
+    const results = await Complaint.aggregate(pipeline);
+
+    const reports = results.map((entry) => ({
+      category: entry._id || "Other",
+      total: entry.total,
+      pending: entry.pending,
+      assigned: entry.assigned,
+      inProgress: entry.inProgress,
+      resolved: entry.resolved,
+      rejected: entry.rejected,
+      resolutionRate: entry.total > 0 ? Math.round((entry.resolved / entry.total) * 100) : 0
+    }));
+
+    return res.status(200).json(reports);
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to generate category reports.", error: error.message });
+  }
+};
+
+export const getWorkerDashboard = async (req, res) => {
+  try {
+    const { workerId } = req.query;
+
+    if (!workerId || !mongoose.Types.ObjectId.isValid(workerId)) {
+      return res.status(400).json({ message: "A valid workerId is required." });
+    }
+
+    const worker = await User.findById(workerId);
+
+    if (!worker || !["Worker", "MP"].includes(worker.role)) {
+      return res.status(403).json({ message: "Only workers or MPs can access the worker dashboard." });
+    }
+
+    const assigned = await Complaint.find({
+      assignedTo: workerId,
+      status: { $in: ["Assigned", "In Progress"] }
+    })
+      .populate("citizenId", "fullName email phone role")
+      .sort({ createdAt: -1 });
+
+    const completed = await Complaint.find({
+      assignedTo: workerId,
+      workerTaskCompleted: true
+    })
+      .populate("citizenId", "fullName email phone role")
+      .sort({ updatedAt: -1 })
+      .limit(20);
+
+    const stats = await Complaint.aggregate([
+      { $match: { assignedTo: new mongoose.Types.ObjectId(workerId) } },
+      {
+        $group: {
+          _id: null,
+          totalAssigned: { $sum: 1 },
+          totalCompleted: { $sum: { $cond: ["$workerTaskCompleted", 1, 0] } },
+          totalPending: {
+            $sum: { $cond: [{ $in: ["$status", ["Assigned", "In Progress"]] }, 1, 0] }
+          },
+          totalResolved: { $sum: { $cond: [{ $eq: ["$status", "Resolved"] }, 1, 0] } }
+        }
+      }
+    ]);
+
+    return res.status(200).json({
+      worker: { id: worker._id, fullName: worker.fullName, role: worker.role },
+      activeComplaints: assigned,
+      completedComplaints: completed,
+      stats: stats[0] || { totalAssigned: 0, totalCompleted: 0, totalPending: 0, totalResolved: 0 }
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to load worker dashboard.", error: error.message });
   }
 };

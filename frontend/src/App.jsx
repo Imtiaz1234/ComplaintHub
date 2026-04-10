@@ -1,12 +1,20 @@
 import { useEffect, useState } from "react";
 import {
+  addComment,
   addProgressUpdate,
   assignComplaint,
   createComplaint,
+  filterComplaints,
+  getCategoryReports,
+  getComments,
   getComplaintHistory,
   getComplaintStatus,
+  getNotifications,
   getUsers,
+  getWorkerDashboard,
   login as loginUser,
+  markAllNotificationsRead,
+  markNotificationRead,
   requestLoginOtp,
   searchComplaints,
   signUp,
@@ -19,6 +27,11 @@ import ComplaintsMap from "./components/ComplaintsMap.jsx";
 
 const STATUS_VALUES = ["Pending", "Assigned", "In Progress", "Resolved", "Rejected"];
 const PRIORITY_VALUES = ["Low", "Medium", "High", "Emergency"];
+const CATEGORY_VALUES = [
+  "Roads & Infrastructure", "Water & Sewage", "Electricity", "Garbage & Waste",
+  "Public Safety", "Noise & Pollution", "Parks & Recreation", "Transportation",
+  "Building & Housing", "Other"
+];
 const ROLE_ASSIGN_OPTIONS = ["Citizen", "Worker", "MP", "Admin"];
 const STORAGE_KEY = "complainthub-user";
 
@@ -53,6 +66,7 @@ export default function App() {
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [complaintCategory, setComplaintCategory] = useState("Other");
   const [locationAddress, setLocationAddress] = useState("");
   const [geoLocation, setGeoLocation] = useState(null);
   const [geoError, setGeoError] = useState("");
@@ -80,6 +94,35 @@ export default function App() {
   const [workUpdateText, setWorkUpdateText] = useState("");
   const [workPhotoFile, setWorkPhotoFile] = useState(null);
   const [workMessage, setWorkMessage] = useState("");
+
+  // Search & Filter state
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterCategory, setFilterCategory] = useState("");
+  const [filterPriority, setFilterPriority] = useState("");
+  const [filterArea, setFilterArea] = useState("");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+  const [filterKeyword, setFilterKeyword] = useState("");
+  const [filterResults, setFilterResults] = useState([]);
+  const [filterMessage, setFilterMessage] = useState("");
+  const [showFilterPanel, setShowFilterPanel] = useState(false);
+
+  // Notification state
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifications, setShowNotifications] = useState(false);
+
+  // Worker Dashboard state
+  const [workerDashData, setWorkerDashData] = useState(null);
+
+  // Comment / Discussion state
+  const [commentComplaintId, setCommentComplaintId] = useState("");
+  const [commentText, setCommentText] = useState("");
+  const [commentList, setCommentList] = useState([]);
+  const [commentMessage, setCommentMessage] = useState("");
+
+  // Category Reports state
+  const [categoryReports, setCategoryReports] = useState([]);
 
   useEffect(() => {
     const rawUser = window.localStorage.getItem(STORAGE_KEY);
@@ -135,6 +178,51 @@ export default function App() {
     }
   };
 
+  const loadNotifications = async (user = currentUser) => {
+    if (!user) {
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+
+    try {
+      const data = await getNotifications(user.id);
+      setNotifications(data.notifications);
+      setUnreadCount(data.unreadCount);
+    } catch {
+      setNotifications([]);
+      setUnreadCount(0);
+    }
+  };
+
+  const loadWorkerDashboard = async (user = currentUser) => {
+    if (!user || !["Worker", "MP"].includes(user.role)) {
+      setWorkerDashData(null);
+      return;
+    }
+
+    try {
+      const data = await getWorkerDashboard(user.id);
+      setWorkerDashData(data);
+    } catch {
+      setWorkerDashData(null);
+    }
+  };
+
+  const loadCategoryReports = async (user = currentUser) => {
+    if (!user || !["Admin", "Super Admin"].includes(user.role)) {
+      setCategoryReports([]);
+      return;
+    }
+
+    try {
+      const data = await getCategoryReports();
+      setCategoryReports(data);
+    } catch {
+      setCategoryReports([]);
+    }
+  };
+
   useEffect(() => {
     if (!currentUser) {
       return;
@@ -145,6 +233,23 @@ export default function App() {
 
   useEffect(() => {
     loadUsers();
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    loadNotifications();
+    const interval = setInterval(() => loadNotifications(), 30000);
+    return () => clearInterval(interval);
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    loadWorkerDashboard();
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    loadCategoryReports();
   }, [currentUser]);
 
   useEffect(() => {
@@ -249,6 +354,17 @@ export default function App() {
     setPassword("");
     setOtpCode("");
     setOtpPreview("");
+    setNotifications([]);
+    setUnreadCount(0);
+    setShowNotifications(false);
+    setWorkerDashData(null);
+    setCategoryReports([]);
+    setFilterResults([]);
+    setFilterMessage("");
+    setCommentComplaintId("");
+    setCommentList([]);
+    setCommentText("");
+    setCommentMessage("");
     window.localStorage.removeItem(STORAGE_KEY);
   };
 
@@ -330,6 +446,7 @@ export default function App() {
         title,
         description,
         citizenId: currentUser.id,
+        category: complaintCategory,
         submissionPhoto
       };
 
@@ -351,6 +468,7 @@ export default function App() {
       setNewComplaint(created);
       setTitle("");
       setDescription("");
+      setComplaintCategory("Other");
       setLocationAddress("");
       setGeoLocation(null);
       setGeoError("");
@@ -480,6 +598,7 @@ export default function App() {
       setWorkUpdateText("");
       setWorkPhotoFile(null);
       await loadComplaints();
+      await loadWorkerDashboard();
 
       if (trackId.trim() === updated.complaintId) {
         const tracked = await getComplaintStatus(updated.complaintId);
@@ -487,6 +606,90 @@ export default function App() {
       }
     } catch (error) {
       setWorkMessage(error.message);
+    }
+  };
+
+  const handleFilterSearch = async (event) => {
+    event.preventDefault();
+    setFilterMessage("");
+
+    try {
+      const results = await filterComplaints({
+        status: filterStatus,
+        category: filterCategory,
+        priority: filterPriority,
+        area: filterArea,
+        dateFrom: filterDateFrom,
+        dateTo: filterDateTo,
+        keyword: filterKeyword
+      });
+      setFilterResults(results);
+      setFilterMessage(`Found ${results.length} complaint(s).`);
+    } catch (error) {
+      setFilterMessage(error.message);
+      setFilterResults([]);
+    }
+  };
+
+  const handleClearFilters = () => {
+    setFilterStatus("");
+    setFilterCategory("");
+    setFilterPriority("");
+    setFilterArea("");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+    setFilterKeyword("");
+    setFilterResults([]);
+    setFilterMessage("");
+  };
+
+  const handleMarkNotificationRead = async (notificationId) => {
+    try {
+      await markNotificationRead(notificationId);
+      await loadNotifications();
+    } catch {}
+  };
+
+  const handleMarkAllRead = async () => {
+    try {
+      await markAllNotificationsRead(currentUser.id);
+      await loadNotifications();
+    } catch {}
+  };
+
+  const handleLoadComments = async (complaintId) => {
+    setCommentComplaintId(complaintId);
+    setCommentMessage("");
+
+    try {
+      const comments = await getComments(complaintId);
+      setCommentList(comments);
+    } catch (error) {
+      setCommentMessage(error.message);
+      setCommentList([]);
+    }
+  };
+
+  const handleAddComment = async (event) => {
+    event.preventDefault();
+    setCommentMessage("");
+
+    if (!commentText.trim()) {
+      setCommentMessage("Comment text is required.");
+      return;
+    }
+
+    try {
+      await addComment(commentComplaintId, {
+        userId: currentUser.id,
+        text: commentText.trim()
+      });
+      setCommentText("");
+      setCommentMessage("Comment added.");
+      const comments = await getComments(commentComplaintId);
+      setCommentList(comments);
+    } catch (error) {
+      setCommentMessage(error.message);
     }
   };
 
@@ -603,7 +806,46 @@ export default function App() {
           <div>
             Signed in as <strong>{currentUser.fullName}</strong> ({currentUser.role})
           </div>
-          <button type="button" className="secondary-button" onClick={handleLogout}>Log out</button>
+          <div className="header-actions">
+            <div className="notification-wrapper">
+              <button
+                type="button"
+                className="secondary-button notification-bell"
+                onClick={() => setShowNotifications(!showNotifications)}
+              >
+                Notifications {unreadCount > 0 ? <span className="notif-badge">{unreadCount}</span> : null}
+              </button>
+              {showNotifications ? (
+                <div className="notification-dropdown">
+                  <div className="notif-header">
+                    <strong>Notifications</strong>
+                    {unreadCount > 0 ? (
+                      <button type="button" className="secondary-button" onClick={handleMarkAllRead}>
+                        Mark all read
+                      </button>
+                    ) : null}
+                  </div>
+                  {notifications.length === 0 ? (
+                    <div className="small notif-empty">No notifications yet.</div>
+                  ) : (
+                    <ul className="notif-list">
+                      {notifications.map((notif) => (
+                        <li
+                          key={notif._id}
+                          className={notif.isRead ? "notif-item read" : "notif-item unread"}
+                          onClick={() => !notif.isRead && handleMarkNotificationRead(notif._id)}
+                        >
+                          <div className="notif-message">{notif.message}</div>
+                          <div className="small">{formatDate(notif.createdAt)}</div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
+            </div>
+            <button type="button" className="secondary-button" onClick={handleLogout}>Log out</button>
+          </div>
         </div>
       </header>
 
@@ -629,6 +871,92 @@ export default function App() {
         </div>
       </section>
 
+      <section className="card">
+        <div className="section-heading">
+          <h3>Search & Filter Complaints</h3>
+          <button type="button" className="secondary-button" onClick={() => setShowFilterPanel(!showFilterPanel)}>
+            {showFilterPanel ? "Hide Filters" : "Show Filters"}
+          </button>
+        </div>
+
+        {showFilterPanel ? (
+          <form onSubmit={handleFilterSearch} className="filter-form">
+            <div className="filter-grid">
+              <div>
+                <label>Status</label>
+                <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+                  <option value="">All</option>
+                  {STATUS_VALUES.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <label>Category</label>
+                <select value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
+                  <option value="">All</option>
+                  {CATEGORY_VALUES.map((c) => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label>Priority</label>
+                <select value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)}>
+                  <option value="">All</option>
+                  {PRIORITY_VALUES.map((p) => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div>
+                <label>Area / Location</label>
+                <input value={filterArea} onChange={(e) => setFilterArea(e.target.value)} placeholder="e.g., Dhaka" />
+              </div>
+              <div>
+                <label>Date from</label>
+                <input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} />
+              </div>
+              <div>
+                <label>Date to</label>
+                <input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} />
+              </div>
+            </div>
+
+            <label>Keyword</label>
+            <input value={filterKeyword} onChange={(e) => setFilterKeyword(e.target.value)} placeholder="Search by title or description..." />
+
+            <div className="filter-actions">
+              <button type="submit">Search</button>
+              <button type="button" className="secondary-button" onClick={handleClearFilters}>Clear</button>
+            </div>
+          </form>
+        ) : null}
+
+        {filterMessage ? <div className="small">{filterMessage}</div> : null}
+
+        {filterResults.length > 0 ? (
+          <div className="filter-results">
+            {filterResults.map((complaint) => (
+              <article key={complaint._id} className="history-item">
+                <div className="history-topline">
+                  <strong>{complaint.complaintId}</strong>
+                  <span className={complaint.isArchived ? "archive-pill archived" : "archive-pill active-archive"}>
+                    {complaint.isArchived ? "Archived" : "Active"}
+                  </span>
+                </div>
+                <div>{complaint.title}</div>
+                <div className="small">Category: {complaint.category || "Other"}</div>
+                <div className="small">Status: {complaint.status} | Priority: {complaint.priority}</div>
+                <div className="small">Created: {formatDate(complaint.createdAt)}</div>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  style={{ marginTop: "8px", width: "auto" }}
+                  onClick={() => handleLoadComments(complaint.complaintId)}
+                >
+                  Discussion
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
       {currentUser.role === "Citizen" ? (
         <section className="card">
           <h3>Submit Complaint</h3>
@@ -639,6 +967,11 @@ export default function App() {
 
             <label>Description</label>
             <textarea rows={4} value={description} onChange={(event) => setDescription(event.target.value)} required />
+
+            <label>Category</label>
+            <select value={complaintCategory} onChange={(event) => setComplaintCategory(event.target.value)}>
+              {CATEGORY_VALUES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
 
             <label>Photo (optional)</label>
             <input
@@ -734,6 +1067,7 @@ export default function App() {
           <div className="tracked-card">
             <div className="small">Title: {trackedComplaint.title}</div>
             <div className="small">Description: {trackedComplaint.description || "N/A"}</div>
+            <div className="small">Category: <span className="status-pill">{trackedComplaint.category || "Other"}</span></div>
             <div className="small">Status: <span className="status-pill">{trackedComplaint.status}</span></div>
             <div className="small">Priority: <span className="status-pill">{trackedComplaint.priority}</span></div>
             <div className="small">
@@ -959,6 +1293,161 @@ export default function App() {
         </section>
       ) : null}
 
+      {isWorkerOrMp && workerDashData ? (
+        <section className="card">
+          <h3>Worker Dashboard</h3>
+          <div className="dashboard-grid">
+            <div className="dashboard-stat">
+              <span className="stat-label">Total Assigned</span>
+              <strong>{workerDashData.stats.totalAssigned}</strong>
+            </div>
+            <div className="dashboard-stat">
+              <span className="stat-label">Active Tasks</span>
+              <strong>{workerDashData.stats.totalPending}</strong>
+            </div>
+            <div className="dashboard-stat">
+              <span className="stat-label">Completed</span>
+              <strong>{workerDashData.stats.totalCompleted}</strong>
+            </div>
+            <div className="dashboard-stat">
+              <span className="stat-label">Resolved</span>
+              <strong>{workerDashData.stats.totalResolved}</strong>
+            </div>
+          </div>
+
+          {workerDashData.activeComplaints.length > 0 ? (
+            <>
+              <h4 style={{ marginTop: "16px" }}>Active Tasks</h4>
+              {workerDashData.activeComplaints.map((c) => (
+                <article key={c._id} className="history-item">
+                  <div className="history-topline">
+                    <strong>{c.complaintId}</strong>
+                    <span className="status-pill">{c.status}</span>
+                  </div>
+                  <div>{c.title}</div>
+                  <div className="small">Category: {c.category || "Other"} | Priority: {c.priority}</div>
+                  <div className="small">Submitted by: {c.citizenId?.fullName || c.submittedBy}</div>
+                  <div className="small">Created: {formatDate(c.createdAt)}</div>
+                </article>
+              ))}
+            </>
+          ) : (
+            <div className="small" style={{ marginTop: "12px" }}>No active tasks right now.</div>
+          )}
+
+          {workerDashData.completedComplaints.length > 0 ? (
+            <>
+              <h4 style={{ marginTop: "16px" }}>Recently Completed</h4>
+              {workerDashData.completedComplaints.slice(0, 5).map((c) => (
+                <article key={c._id} className="history-item">
+                  <div className="history-topline">
+                    <strong>{c.complaintId}</strong>
+                    <span className="archive-pill archived">Completed</span>
+                  </div>
+                  <div>{c.title}</div>
+                  <div className="small">Completed: {formatDate(c.updatedAt)}</div>
+                </article>
+              ))}
+            </>
+          ) : null}
+        </section>
+      ) : null}
+
+      <section className="card">
+        <h3>Comment / Discussion</h3>
+        <p className="small">Enter a complaint ID to view and add comments to the discussion thread.</p>
+        <div className="inline">
+          <input
+            placeholder="Enter complaint ID"
+            value={commentComplaintId}
+            onChange={(e) => setCommentComplaintId(e.target.value)}
+          />
+          <button type="button" onClick={() => handleLoadComments(commentComplaintId)}>Load</button>
+        </div>
+
+        {commentComplaintId && commentList.length > 0 ? (
+          <div className="comment-thread">
+            {commentList.map((comment) => (
+              <div key={comment._id} className="comment-item">
+                <div className="comment-author">
+                  <strong>{comment.authorName}</strong>
+                  <span className="status-pill">{comment.authorRole}</span>
+                  <span className="small">{formatDate(comment.createdAt)}</span>
+                </div>
+                <div className="comment-text">{comment.text}</div>
+              </div>
+            ))}
+          </div>
+        ) : commentComplaintId ? (
+          <div className="small" style={{ marginTop: "8px" }}>No comments yet for this complaint.</div>
+        ) : null}
+
+        {commentComplaintId ? (
+          <form onSubmit={handleAddComment} style={{ marginTop: "12px" }}>
+            <textarea
+              rows={3}
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              placeholder="Write your comment..."
+              maxLength={1000}
+            />
+            <button type="submit">Post Comment</button>
+          </form>
+        ) : null}
+
+        {commentMessage ? <div className="small">{commentMessage}</div> : null}
+      </section>
+
+      {isAdmin ? (
+        <section className="card">
+          <h3>Category-wise Reports</h3>
+          <p className="small">Breakdown of complaints by category with resolution statistics.</p>
+          <button type="button" className="secondary-button" style={{ width: "auto", marginBottom: "12px" }} onClick={() => loadCategoryReports()}>
+            Refresh Reports
+          </button>
+
+          {categoryReports.length > 0 ? (
+            <div className="category-reports-table-wrap">
+              <table className="category-reports-table">
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th>Total</th>
+                    <th>Pending</th>
+                    <th>Assigned</th>
+                    <th>In Progress</th>
+                    <th>Resolved</th>
+                    <th>Rejected</th>
+                    <th>Resolution %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {categoryReports.map((report) => (
+                    <tr key={report.category}>
+                      <td>{report.category}</td>
+                      <td><strong>{report.total}</strong></td>
+                      <td>{report.pending}</td>
+                      <td>{report.assigned}</td>
+                      <td>{report.inProgress}</td>
+                      <td>{report.resolved}</td>
+                      <td>{report.rejected}</td>
+                      <td>
+                        <div className="resolution-bar-wrap">
+                          <div className="resolution-bar" style={{ width: `${report.resolutionRate}%` }} />
+                          <span>{report.resolutionRate}%</span>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="small">No data available yet.</div>
+          )}
+        </section>
+      ) : null}
+
       <section className="card history-archive-card">
         <div className="section-heading">
           <div>
@@ -995,7 +1484,7 @@ export default function App() {
               </div>
               <div>{complaint.title}</div>
               <div className="small">{complaint.description}</div>
-              <div className="small">Status: {complaint.status} | Priority: {complaint.priority}</div>
+              <div className="small">Category: {complaint.category || "Other"} | Status: {complaint.status} | Priority: {complaint.priority}</div>
               <div className="small">Submitted by: {complaint.citizenId?.fullName || complaint.submittedBy}</div>
               {complaint.assignedTo ? (
                 <div className="small">
