@@ -19,11 +19,16 @@ export const uploadImage = async (dataUri, folder = "complainthub") => {
     return dataUri;
   }
 
-  const result = await cloudinary.uploader.upload(dataUri, {
-    folder,
-    resource_type: "image",
-    transformation: [{ width: 1200, crop: "limit", quality: "auto", fetch_format: "auto" }]
-  });
+  try {
+    const result = await cloudinary.uploader.upload(dataUri, {
+      folder,
+      resource_type: "image"
+    });
 
-  return result.secure_url;
+    return result.secure_url;
+  } catch (err) {
+    console.error("Cloudinary upload failed:", err.message || err);
+    // Fall back to base64 so complaint creation doesn't fail
+    return dataUri;
+  }
 };
