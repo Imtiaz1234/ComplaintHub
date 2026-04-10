@@ -10,6 +10,19 @@ const STATUS_VALUES = [
 
 const PRIORITY_VALUES = ["Low", "Medium", "High", "Emergency"];
 
+const CATEGORY_VALUES = [
+  "Roads & Infrastructure",
+  "Water & Sewage",
+  "Electricity",
+  "Garbage & Waste",
+  "Public Safety",
+  "Noise & Pollution",
+  "Parks & Recreation",
+  "Transportation",
+  "Building & Housing",
+  "Other"
+];
+
 const progressLogSchema = new mongoose.Schema(
   {
     text: {
@@ -35,6 +48,33 @@ const progressLogSchema = new mongoose.Schema(
       type: String,
       enum: ["update", "completed"],
       default: "update"
+    }
+  },
+  { timestamps: true }
+);
+
+const commentSchema = new mongoose.Schema(
+  {
+    text: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 1000
+    },
+    authorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true
+    },
+    authorName: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    authorRole: {
+      type: String,
+      required: true,
+      trim: true
     }
   },
   { timestamps: true }
@@ -99,7 +139,13 @@ const complaintSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
+    category: {
+      type: String,
+      enum: CATEGORY_VALUES,
+      default: "Other"
+    },
     progressLogs: [progressLogSchema],
+    comments: [commentSchema],
 
     // Deadline & SLA Tracking
     deadline: {
@@ -136,4 +182,4 @@ const complaintSchema = new mongoose.Schema(
 complaintSchema.index({ title: "text", description: "text" });
 
 export const Complaint = mongoose.model("Complaint", complaintSchema);
-export { STATUS_VALUES, PRIORITY_VALUES };
+export { STATUS_VALUES, PRIORITY_VALUES, CATEGORY_VALUES };

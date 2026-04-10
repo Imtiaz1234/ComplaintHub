@@ -6,6 +6,7 @@ import authRoutes from "./routes/authRoutes.js";
 import complaintRoutes from "./routes/complaintRoutes.js";
 import analyticsRoutes from "./routes/analyticsRoutes.js";
 import exportRoutes from "./routes/exportRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 import { connectDB } from "./config/db.js";
 
 dotenv.config();
@@ -24,6 +25,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/complaints", complaintRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/export", exportRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 connectDB()
   .then(async () => {
