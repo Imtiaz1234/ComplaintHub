@@ -1090,6 +1090,11 @@ export default function App() {
                 <div className="small">Category: {complaint.category || "Other"}</div>
                 <div className="small">Status: {complaint.status} | Priority: {complaint.priority}</div>
                 <div className="small">Created: {formatDate(complaint.createdAt)}</div>
+                {complaint.submissionPhoto ? (
+                  <div style={{ marginTop: 8 }}>
+                    <img src={complaint.submissionPhoto} alt="Complaint" className="complaint-photo thumb" />
+                  </div>
+                ) : null}
                 <button
                   type="button"
                   className="secondary-button"
@@ -1607,6 +1612,11 @@ export default function App() {
                     <div className="small">
                       Assigned to: {c.assignedTo?.fullName || "Unassigned"}
                     </div>
+                    {c.submissionPhoto ? (
+                      <div style={{ marginTop: 8 }}>
+                        <img src={c.submissionPhoto} alt="Complaint" className="complaint-photo thumb" />
+                      </div>
+                    ) : null}
                   </article>
                 ))}
               </div>
@@ -1882,6 +1892,12 @@ export default function App() {
                 </div>
               ) : null}
               <div className="small">Created: {formatDate(complaint.createdAt)}</div>
+
+              {complaint.submissionPhoto ? (
+                <div style={{ marginTop: 10 }}>
+                  <img src={complaint.submissionPhoto} alt="Complaint submission" className="complaint-photo thumb" />
+                </div>
+              ) : null}
 
               {complaint.deadline ? (
                 <div className={`small ${complaint.deadline && new Date(complaint.deadline) < new Date() && !["Resolved", "Rejected"].includes(complaint.status) ? "overdue-date" : ""}`}>
