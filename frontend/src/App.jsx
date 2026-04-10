@@ -834,100 +834,164 @@ export default function App() {
 
   if (!currentUser) {
     return (
-      <div className="container auth-container">
-        <section className="auth-hero">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
-            <p className="eyebrow">ComplaintHub</p>
-            <button type="button" className="theme-toggle" onClick={toggleTheme} title="Toggle theme">
-              {theme === "light" ? "🌙" : "☀️"}
-            </button>
-          </div>
-          <h1>A platform where citizens can report city problems, raise their voices, and work together to make their community better.</h1>
-          <p className="hero-copy">
-            Log in first, then submit complaints, track status by complaint ID, browse complaint history and archive, and use the FAQ help center.
-          </p>
-        </section>
+      <div className="auth-page">
+        <div className="auth-page-inner">
+          {/* ── Left: Hero ── */}
+          <section className="auth-hero">
+            <div className="auth-hero-top">
+              <div className="auth-logo">
+                <span className="auth-logo-icon">📢</span>
+                <span className="auth-logo-text">ComplaintHub</span>
+              </div>
+              <button type="button" className="theme-toggle" onClick={toggleTheme} title="Toggle theme">
+                {theme === "light" ? "🌙" : "☀️"}
+              </button>
+            </div>
 
-        <section className="card auth-card">
-          <div className="auth-tabs">
-            <button type="button" className={authMode === "signup" ? "tab active" : "tab"} onClick={() => setAuthMode("signup")}>Sign Up</button>
-            <button type="button" className={authMode === "login" ? "tab active" : "tab"} onClick={() => setAuthMode("login")}>Login</button>
-          </div>
+            <h1 className="auth-headline">Report city problems.<br />Track real progress.<br />Build better communities.</h1>
+            <p className="auth-subtext">
+              Join thousands of citizens holding local government accountable — submit complaints, follow resolutions in real time, and see change happen.
+            </p>
 
-          <form onSubmit={handleAuthSubmit}>
-            {authMode === "signup" ? (
-              <>
-                <label>Full Name</label>
-                <input value={fullName} onChange={(event) => setFullName(event.target.value)} required />
-
-                <label>Email</label>
-                <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
-
-                <label>Phone (optional)</label>
-                <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+8801XXXXXXXXX" />
-
-                <label>Password</label>
-                <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
-              </>
-            ) : (
-              <>
-                <label>Email</label>
-                <input value={email} onChange={(event) => setEmail(event.target.value)} required />
-
-                <div className="auth-tabs login-method-tabs">
-                  <button
-                    type="button"
-                    className={loginMethod === "password" ? "tab active" : "tab"}
-                    onClick={() => {
-                      setLoginMethod("password");
-                      setAuthError("");
-                      setAuthMessage("");
-                      setOtpPreview("");
-                    }}
-                  >
-                    Sign in using Password
-                  </button>
-                  <button
-                    type="button"
-                    className={loginMethod === "otp" ? "tab active" : "tab"}
-                    onClick={() => {
-                      setLoginMethod("otp");
-                      setAuthError("");
-                      setAuthMessage("");
-                      setOtpPreview("");
-                    }}
-                  >
-                    Sign in using OTP (Optional)
-                  </button>
+            <div className="auth-features">
+              <div className="auth-feature">
+                <span className="auth-feature-icon">📝</span>
+                <div>
+                  <strong>Submit & Track</strong>
+                  <span>File complaints with photos and locations, then track by ID</span>
                 </div>
+              </div>
+              <div className="auth-feature">
+                <span className="auth-feature-icon">🗺️</span>
+                <div>
+                  <strong>Live Map</strong>
+                  <span>See all complaints plotted on an interactive city map</span>
+                </div>
+              </div>
+              <div className="auth-feature">
+                <span className="auth-feature-icon">📊</span>
+                <div>
+                  <strong>Analytics & Reports</strong>
+                  <span>Category breakdowns, resolution rates, and trend insights</span>
+                </div>
+              </div>
+              <div className="auth-feature">
+                <span className="auth-feature-icon">🔔</span>
+                <div>
+                  <strong>Real-time Updates</strong>
+                  <span>Get notified the moment your complaint status changes</span>
+                </div>
+              </div>
+            </div>
 
-                {loginMethod === "password" ? (
+            <p className="auth-trust">Trusted by communities across the country</p>
+          </section>
+
+          {/* ── Right: Form Card ── */}
+          <section className="auth-card-wrap">
+            <div className="card auth-card">
+              <h2 className="auth-card-title">
+                {authMode === "signup" ? "Create your account" : "Welcome back"}
+              </h2>
+              <p className="auth-card-subtitle">
+                {authMode === "signup" ? "Start making a difference in your community today." : "Log in to continue where you left off."}
+              </p>
+
+              <div className="auth-tabs">
+                <button type="button" className={authMode === "signup" ? "tab active" : "tab"} onClick={() => setAuthMode("signup")}>Sign Up</button>
+                <button type="button" className={authMode === "login" ? "tab active" : "tab"} onClick={() => setAuthMode("login")}>Login</button>
+              </div>
+
+              <form onSubmit={handleAuthSubmit}>
+                {authMode === "signup" ? (
                   <>
+                    <label>Full Name</label>
+                    <input value={fullName} onChange={(event) => setFullName(event.target.value)} placeholder="John Doe" required />
+
+                    <label>Email</label>
+                    <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required />
+
+                    <label>Phone (optional)</label>
+                    <input value={phone} onChange={(event) => setPhone(event.target.value)} placeholder="+8801XXXXXXXXX" />
+
                     <label>Password</label>
-                    <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} required />
+                    <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Min. 6 characters" required />
                   </>
                 ) : (
                   <>
-                    <label>OTP Code</label>
-                    <input value={otpCode} onChange={(event) => setOtpCode(event.target.value)} placeholder="Enter OTP from your email" />
-                    <div className="otp-actions">
-                      <button type="button" onClick={handleRequestOtpLogin}>Send OTP to Email</button>
-                      <button type="button" onClick={handleVerifyOtpLogin}>Verify OTP & Login</button>
+                    <label>Email</label>
+                    <input value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required />
+
+                    <div className="auth-tabs login-method-tabs">
+                      <button
+                        type="button"
+                        className={loginMethod === "password" ? "tab active" : "tab"}
+                        onClick={() => {
+                          setLoginMethod("password");
+                          setAuthError("");
+                          setAuthMessage("");
+                          setOtpPreview("");
+                        }}
+                      >
+                        Password
+                      </button>
+                      <button
+                        type="button"
+                        className={loginMethod === "otp" ? "tab active" : "tab"}
+                        onClick={() => {
+                          setLoginMethod("otp");
+                          setAuthError("");
+                          setAuthMessage("");
+                          setOtpPreview("");
+                        }}
+                      >
+                        OTP Login
+                      </button>
                     </div>
-                    {otpPreview ? <div className="otp-box">Demo OTP: <strong>{otpPreview}</strong></div> : null}
+
+                    {loginMethod === "password" ? (
+                      <>
+                        <label>Password</label>
+                        <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Enter your password" required />
+                      </>
+                    ) : (
+                      <>
+                        <label>OTP Code</label>
+                        <input value={otpCode} onChange={(event) => setOtpCode(event.target.value)} placeholder="Enter OTP from your email" />
+                        <div className="otp-actions">
+                          <button type="button" onClick={handleRequestOtpLogin}>Send OTP</button>
+                          <button type="button" onClick={handleVerifyOtpLogin}>Verify & Login</button>
+                        </div>
+                        {otpPreview ? <div className="otp-box">Demo OTP: <strong>{otpPreview}</strong></div> : null}
+                      </>
+                    )}
                   </>
                 )}
-              </>
-            )}
 
-            {authMode === "signup" || loginMethod === "password" ? (
-              <button type="submit">{authMode === "signup" ? "Create Account" : "Login"}</button>
-            ) : null}
-          </form>
+                {authMode === "signup" || loginMethod === "password" ? (
+                  <button type="submit" className="auth-submit-btn">
+                    {authMode === "signup" ? "Create Account →" : "Login →"}
+                  </button>
+                ) : null}
+              </form>
 
-          {authError ? <div className="error">{authError}</div> : null}
-          {authMessage ? <div className="success">{authMessage}</div> : null}
-        </section>
+              {authError ? <div className="error">{authError}</div> : null}
+              {authMessage ? <div className="success">{authMessage}</div> : null}
+
+              <p className="auth-switch">
+                {authMode === "signup" ? "Already have an account? " : "Don't have an account? "}
+                <button
+                  type="button"
+                  className="auth-switch-link"
+                  onClick={() => setAuthMode(authMode === "signup" ? "login" : "signup")}
+                >
+                  {authMode === "signup" ? "Log in" : "Sign up"}
+                </button>
+              </p>
+            </div>
+          </section>
+        </div>
+      </div>
       </div>
     );
   }
