@@ -806,8 +806,6 @@ export default function App() {
       setCommentMessage(error.message);
     }
   };
-    }
-  };
 
   if (!currentUser) {
     return (
