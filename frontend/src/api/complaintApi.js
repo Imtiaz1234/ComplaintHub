@@ -228,3 +228,99 @@ export const updateUserRole = async ({ requesterId, userId, role }) => {
 
   return response.json();
 };
+
+// ── Deadline & SLA ──
+
+export const setDeadline = async (complaintId, { adminId, deadline }) => {
+  const response = await fetch(`${API_BASE_URL}/complaints/${encodeURIComponent(complaintId)}/deadline`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ adminId, deadline })
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+};
+
+export const getOverdueComplaints = async (adminId) => {
+  const response = await fetch(`${API_BASE_URL}/complaints/overdue?adminId=${encodeURIComponent(adminId)}`);
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+};
+
+// ── Citizen Feedback ──
+
+export const submitFeedback = async (complaintId, { citizenId, rating, comment }) => {
+  const response = await fetch(`${API_BASE_URL}/complaints/${encodeURIComponent(complaintId)}/feedback`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ citizenId, rating, comment })
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+};
+
+// ── Analytics ──
+
+export const getAnalytics = async (adminId) => {
+  const response = await fetch(`${API_BASE_URL}/analytics?adminId=${encodeURIComponent(adminId)}`);
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+};
+
+// ── Export ──
+
+export const exportCSV = async (adminId) => {
+  const response = await fetch(`${API_BASE_URL}/export/csv?adminId=${encodeURIComponent(adminId)}`);
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `complaints-report-${Date.now()}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+export const exportPDF = async (adminId) => {
+  const response = await fetch(`${API_BASE_URL}/export/pdf?adminId=${encodeURIComponent(adminId)}`);
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  const blob = await response.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `complaints-report-${Date.now()}.html`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};

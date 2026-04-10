@@ -166,12 +166,18 @@ export const updateComplaintStatus = async (req, res) => {
       });
     }
 
+    const updateFields = {
+      status,
+      isArchived: ["Resolved", "Rejected"].includes(status)
+    };
+
+    if (status === "Resolved") {
+      updateFields.resolvedAt = new Date();
+    }
+
     const complaint = await Complaint.findOneAndUpdate(
       { complaintId },
-      {
-        status,
-        isArchived: ["Resolved", "Rejected"].includes(status)
-      },
+      updateFields,
       { new: true }
     )
       .populate("assignedTo", "fullName email phone role")
@@ -409,5 +415,127 @@ export const getSimilarComplaints = async (req, res) => {
     return res.status(200).json(similarComplaints);
   } catch (error) {
     return res.status(500).json({ message: "Failed to search complaints.", error: error.message });
+  }
+};
+
+// ── Deadline & SLA Tracking ──
+
+export const setDeadline = async (req, res) => {
+  try {
+    const { complaintId } = req.params;
+    const { adminId, deadline } = req.body;
+
+    const admin = await requireAdminUser(adminId);
+
+    if (!admin) {
+      return res.status(403).json({ message: "Only admins can set deadlines." });
+    }
+
+    if (!deadline) {
+      return res.status(400).json({ message: "A deadline date is required." });
+    }
+
+    const deadlineDate = new Date(deadline);
+
+    if (Number.isNaN(deadlineDate.getTime())) {
+      return res.status(400).json({ message: "Invalid deadline date." });
+    }
+
+    const complaint = await Complaint.findOneAndUpdate(
+      { complaintId },
+      { deadline: deadlineDate },
+      { new: true }
+    )
+      .populate("assignedTo", "fullName email phone role")
+      .populate("citizenId", "fullName email phone role");
+
+    if (!complaint) {
+      return res.status(404).json({ message: "Complaint not found." });
+    }
+
+    return res.status(200).json(complaint);
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to set deadline.", error: error.message });
+  }
+};
+
+export const getOverdueComplaints = async (req, res) => {
+  try {
+    const { adminId } = req.query;
+
+    const admin = await requireAdminUser(adminId);
+
+    if (!admin) {
+      return res.status(403).json({ message: "Only admins can view overdue complaints." });
+    }
+
+    const now = new Date();
+
+    const overdue = await Complaint.find({
+      deadline: { $lt: now },
+      status: { $nin: ["Resolved", "Rejected"] }
+    })
+      .populate("assignedTo", "fullName email phone role")
+      .populate("citizenId", "fullName email phone role")
+      .sort({ deadline: 1 });
+
+    return res.status(200).json(overdue);
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to fetch overdue complaints.", error: error.message });
+  }
+};
+
+// ── Citizen Feedback & Rating ──
+
+export const submitFeedback = async (req, res) => {
+  try {
+    const { complaintId } = req.params;
+    const { citizenId, rating, comment } = req.body;
+
+    if (!citizenId) {
+      return res.status(400).json({ message: "citizenId is required." });
+    }
+
+    const citizen = await User.findById(citizenId);
+
+    if (!citizen) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    const ratingNum = Number(rating);
+
+    if (!rating || Number.isNaN(ratingNum) || ratingNum < 1 || ratingNum > 5) {
+      return res.status(400).json({ message: "Rating must be between 1 and 5." });
+    }
+
+    const complaint = await Complaint.findOne({ complaintId });
+
+    if (!complaint) {
+      return res.status(404).json({ message: "Complaint not found." });
+    }
+
+    if (complaint.citizenId.toString() !== citizenId) {
+      return res.status(403).json({ message: "Only the complaint author can submit feedback." });
+    }
+
+    if (complaint.status !== "Resolved") {
+      return res.status(400).json({ message: "Feedback can only be submitted for resolved complaints." });
+    }
+
+    if (complaint.feedback?.rating) {
+      return res.status(400).json({ message: "Feedback has already been submitted for this complaint." });
+    }
+
+    complaint.feedback = {
+      rating: ratingNum,
+      comment: typeof comment === "string" ? comment.trim() : "",
+      submittedAt: new Date()
+    };
+
+    await complaint.save();
+
+    return res.status(200).json(complaint);
+  } catch (error) {
+    return res.status(500).json({ message: "Failed to submit feedback.", error: error.message });
   }
 };

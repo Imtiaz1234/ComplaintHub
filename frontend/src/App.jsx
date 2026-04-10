@@ -13,7 +13,13 @@ import {
   updateComplaintPriority,
   updateComplaintStatus,
   updateUserRole,
-  verifyLoginOtp
+  verifyLoginOtp,
+  setDeadline,
+  getOverdueComplaints,
+  submitFeedback,
+  getAnalytics,
+  exportCSV,
+  exportPDF
 } from "./api/complaintApi";
 import ComplaintsMap from "./components/ComplaintsMap.jsx";
 
@@ -81,6 +87,24 @@ export default function App() {
   const [workPhotoFile, setWorkPhotoFile] = useState(null);
   const [workMessage, setWorkMessage] = useState("");
 
+  // Deadline & SLA state
+  const [deadlineComplaintId, setDeadlineComplaintId] = useState("");
+  const [deadlineDate, setDeadlineDate] = useState("");
+  const [deadlineMessage, setDeadlineMessage] = useState("");
+  const [overdueComplaints, setOverdueComplaints] = useState([]);
+
+  // Feedback state
+  const [feedbackRating, setFeedbackRating] = useState(5);
+  const [feedbackComment, setFeedbackComment] = useState("");
+  const [feedbackMessage, setFeedbackMessage] = useState("");
+
+  // Analytics state
+  const [analytics, setAnalytics] = useState(null);
+  const [analyticsError, setAnalyticsError] = useState("");
+
+  // Export state
+  const [exportMessage, setExportMessage] = useState("");
+
   useEffect(() => {
     const rawUser = window.localStorage.getItem(STORAGE_KEY);
 
@@ -135,6 +159,35 @@ export default function App() {
     }
   };
 
+  const loadAnalytics = async (user = currentUser) => {
+    if (!user || !["Admin", "Super Admin"].includes(user.role)) {
+      setAnalytics(null);
+      return;
+    }
+
+    try {
+      const data = await getAnalytics(user.id);
+      setAnalytics(data);
+      setAnalyticsError("");
+    } catch (error) {
+      setAnalyticsError(error.message);
+    }
+  };
+
+  const loadOverdue = async (user = currentUser) => {
+    if (!user || !["Admin", "Super Admin"].includes(user.role)) {
+      setOverdueComplaints([]);
+      return;
+    }
+
+    try {
+      const data = await getOverdueComplaints(user.id);
+      setOverdueComplaints(data);
+    } catch {
+      setOverdueComplaints([]);
+    }
+  };
+
   useEffect(() => {
     if (!currentUser) {
       return;
@@ -145,6 +198,11 @@ export default function App() {
 
   useEffect(() => {
     loadUsers();
+  }, [currentUser]);
+
+  useEffect(() => {
+    loadAnalytics();
+    loadOverdue();
   }, [currentUser]);
 
   useEffect(() => {
@@ -490,6 +548,63 @@ export default function App() {
     }
   };
 
+  const handleSetDeadline = async (event) => {
+    event.preventDefault();
+    setDeadlineMessage("");
+
+    try {
+      const updated = await setDeadline(deadlineComplaintId.trim(), {
+        adminId: currentUser.id,
+        deadline: deadlineDate
+      });
+      setDeadlineMessage(`Deadline set for ${updated.complaintId}: ${new Date(updated.deadline).toLocaleDateString()}`);
+      await loadComplaints();
+      await loadOverdue();
+    } catch (error) {
+      setDeadlineMessage(error.message);
+    }
+  };
+
+  const handleSubmitFeedback = async (complaintId) => {
+    setFeedbackMessage("");
+
+    try {
+      await submitFeedback(complaintId, {
+        citizenId: currentUser.id,
+        rating: feedbackRating,
+        comment: feedbackComment
+      });
+      setFeedbackMessage(`Thank you! Your ${feedbackRating}-star rating for ${complaintId} has been recorded.`);
+      setFeedbackComment("");
+      setFeedbackRating(5);
+      await loadComplaints();
+    } catch (error) {
+      setFeedbackMessage(error.message);
+    }
+  };
+
+  const handleExportCSV = async () => {
+    setExportMessage("");
+
+    try {
+      await exportCSV(currentUser.id);
+      setExportMessage("CSV report downloaded.");
+    } catch (error) {
+      setExportMessage(error.message);
+    }
+  };
+
+  const handleExportPDF = async () => {
+    setExportMessage("");
+
+    try {
+      await exportPDF(currentUser.id);
+      setExportMessage("PDF report downloaded.");
+    } catch (error) {
+      setExportMessage(error.message);
+    }
+  };
+
   if (!currentUser) {
     return (
       <div className="container auth-container">
@@ -790,6 +905,50 @@ export default function App() {
                 </ul>
               </div>
             ) : null}
+
+            {/* Citizen Feedback & Rating */}
+            {trackedComplaint.feedback?.rating ? (
+              <div className="feedback-display">
+                <div className="small"><strong>Citizen Feedback</strong></div>
+                <div className="rating-stars">
+                  {"★".repeat(trackedComplaint.feedback.rating)}{"☆".repeat(5 - trackedComplaint.feedback.rating)}
+                  <span className="small"> ({trackedComplaint.feedback.rating}/5)</span>
+                </div>
+                {trackedComplaint.feedback.comment ? (
+                  <div className="small feedback-comment">{trackedComplaint.feedback.comment}</div>
+                ) : null}
+              </div>
+            ) : null}
+            {trackedComplaint.status === "Resolved" &&
+              !trackedComplaint.feedback?.rating &&
+              currentUser?.role === "Citizen" &&
+              trackedComplaint.submittedBy === (currentUser.email || currentUser.phone || currentUser.fullName) ? (
+              <div className="feedback-form">
+                <div className="small"><strong>Rate this resolution</strong></div>
+                <div className="rating-input">
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      className={star <= feedbackRating ? "star-btn active" : "star-btn"}
+                      onClick={() => setFeedbackRating(star)}
+                    >
+                      {star <= feedbackRating ? "★" : "☆"}
+                    </button>
+                  ))}
+                </div>
+                <textarea
+                  rows={2}
+                  value={feedbackComment}
+                  onChange={(event) => setFeedbackComment(event.target.value)}
+                  placeholder="Optional comment about the resolution..."
+                />
+                <button type="button" onClick={() => handleSubmitFeedback(trackedComplaint.complaintId)}>
+                  Submit Feedback
+                </button>
+                {feedbackMessage ? <div className="small">{feedbackMessage}</div> : null}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </section>
@@ -899,6 +1058,205 @@ export default function App() {
               <div className="small">No Worker or MP users yet. Promote accounts under User Management first.</div>
             ) : null}
           </section>
+
+          {/* Analytics Dashboard */}
+          <section className="card">
+            <h3>Analytics Dashboard</h3>
+            <div className="analytics-actions">
+              <button type="button" onClick={() => loadAnalytics()}>Refresh Analytics</button>
+            </div>
+            {analyticsError ? <div className="error">{analyticsError}</div> : null}
+            {analytics ? (
+              <div className="analytics-dashboard">
+                <div className="dashboard-grid">
+                  <div className="dashboard-stat">
+                    <span className="stat-label">Total Complaints</span>
+                    <strong>{analytics.totalComplaints}</strong>
+                  </div>
+                  <div className="dashboard-stat">
+                    <span className="stat-label">Total Users</span>
+                    <strong>{analytics.totalUsers}</strong>
+                  </div>
+                  <div className="dashboard-stat">
+                    <span className="stat-label">Overdue</span>
+                    <strong className="overdue-count">{analytics.overdueCount}</strong>
+                  </div>
+                  <div className="dashboard-stat">
+                    <span className="stat-label">Avg Rating</span>
+                    <strong>{analytics.feedbackStats.totalRatings > 0
+                      ? `${Math.round(analytics.feedbackStats.avgRating * 10) / 10}/5`
+                      : "N/A"}</strong>
+                  </div>
+                </div>
+
+                <h4>Complaints by Status</h4>
+                <div className="chart-bar-group">
+                  {analytics.statusCounts.map((s) => (
+                    <div key={s.status} className="chart-bar-item">
+                      <span className="chart-bar-label">{s.status}</span>
+                      <div className="chart-bar-track">
+                        <div
+                          className="chart-bar-fill"
+                          style={{ width: `${Math.min((s.count / Math.max(analytics.totalComplaints, 1)) * 100, 100)}%` }}
+                        />
+                      </div>
+                      <span className="chart-bar-value">{s.count}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <h4>Complaints by Priority</h4>
+                <div className="chart-bar-group">
+                  {analytics.priorityCounts.map((p) => (
+                    <div key={p.priority} className="chart-bar-item">
+                      <span className="chart-bar-label">{p.priority}</span>
+                      <div className="chart-bar-track">
+                        <div
+                          className="chart-bar-fill priority-bar"
+                          style={{ width: `${Math.min((p.count / Math.max(analytics.totalComplaints, 1)) * 100, 100)}%` }}
+                        />
+                      </div>
+                      <span className="chart-bar-value">{p.count}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <h4>Resolution Times</h4>
+                <div className="dashboard-grid">
+                  <div className="dashboard-stat">
+                    <span className="stat-label">Total Resolved</span>
+                    <strong>{analytics.resolution.totalResolved}</strong>
+                  </div>
+                  <div className="dashboard-stat">
+                    <span className="stat-label">Avg Time</span>
+                    <strong>{analytics.resolution.avgHours}h</strong>
+                  </div>
+                  <div className="dashboard-stat">
+                    <span className="stat-label">Min Time</span>
+                    <strong>{analytics.resolution.minHours}h</strong>
+                  </div>
+                  <div className="dashboard-stat">
+                    <span className="stat-label">Max Time</span>
+                    <strong>{analytics.resolution.maxHours}h</strong>
+                  </div>
+                </div>
+
+                <h4>Monthly Volume (Last 12 Months)</h4>
+                {analytics.monthlyVolume.length === 0 ? (
+                  <div className="small">No data available yet.</div>
+                ) : (
+                  <div className="chart-bar-group">
+                    {analytics.monthlyVolume.map((m) => {
+                      const maxCount = Math.max(...analytics.monthlyVolume.map((mv) => mv.count), 1);
+                      return (
+                        <div key={`${m.year}-${m.month}`} className="chart-bar-item">
+                          <span className="chart-bar-label">{m.year}-{String(m.month).padStart(2, "0")}</span>
+                          <div className="chart-bar-track">
+                            <div
+                              className="chart-bar-fill monthly-bar"
+                              style={{ width: `${(m.count / maxCount) * 100}%` }}
+                            />
+                          </div>
+                          <span className="chart-bar-value">{m.count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <h4>Worker Performance</h4>
+                {analytics.workerPerformance.length === 0 ? (
+                  <div className="small">No worker data available yet.</div>
+                ) : (
+                  <div className="worker-perf-table">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Worker</th>
+                          <th>Role</th>
+                          <th>Assigned</th>
+                          <th>Resolved</th>
+                          <th>Completed</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {analytics.workerPerformance.map((w) => (
+                          <tr key={w.workerId}>
+                            <td>{w.fullName}</td>
+                            <td>{w.role}</td>
+                            <td>{w.totalAssigned}</td>
+                            <td>{w.resolved}</td>
+                            <td>{w.completed}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="small">Loading analytics...</div>
+            )}
+          </section>
+
+          {/* Deadline & SLA Tracking */}
+          <section className="card">
+            <h3>Deadline & SLA Tracking</h3>
+            <p className="small">Set due dates for complaints and track overdue ones.</p>
+            <form onSubmit={handleSetDeadline}>
+              <label>Complaint ID</label>
+              <input
+                value={deadlineComplaintId}
+                onChange={(event) => setDeadlineComplaintId(event.target.value)}
+                required
+              />
+              <label>Deadline Date</label>
+              <input
+                type="datetime-local"
+                value={deadlineDate}
+                onChange={(event) => setDeadlineDate(event.target.value)}
+                required
+              />
+              <button type="submit">Set Deadline</button>
+            </form>
+            {deadlineMessage ? <div className="small">{deadlineMessage}</div> : null}
+
+            <h4>Overdue Complaints ({overdueComplaints.length})</h4>
+            <button type="button" className="secondary-button" onClick={() => loadOverdue()}>Refresh Overdue</button>
+            {overdueComplaints.length === 0 ? (
+              <div className="small">No overdue complaints found.</div>
+            ) : (
+              <div className="overdue-list">
+                {overdueComplaints.map((c) => (
+                  <article key={c._id} className="history-item overdue-item">
+                    <div className="history-topline">
+                      <strong>{c.complaintId}</strong>
+                      <span className="archive-pill overdue-pill">OVERDUE</span>
+                    </div>
+                    <div>{c.title}</div>
+                    <div className="small">Status: {c.status} | Priority: {c.priority}</div>
+                    <div className="small overdue-date">
+                      Deadline: {formatDate(c.deadline)}
+                    </div>
+                    <div className="small">
+                      Assigned to: {c.assignedTo?.fullName || "Unassigned"}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Export Reports */}
+          <section className="card">
+            <h3>Export Reports</h3>
+            <p className="small">Download complaint data as CSV or printable PDF report.</p>
+            <div className="export-actions">
+              <button type="button" onClick={handleExportCSV}>Export CSV</button>
+              <button type="button" onClick={handleExportPDF}>Export PDF Report</button>
+            </div>
+            {exportMessage ? <div className="small">{exportMessage}</div> : null}
+          </section>
         </>
       ) : null}
 
@@ -1003,6 +1361,20 @@ export default function App() {
                 </div>
               ) : null}
               <div className="small">Created: {formatDate(complaint.createdAt)}</div>
+
+              {complaint.deadline ? (
+                <div className={`small ${complaint.deadline && new Date(complaint.deadline) < new Date() && !["Resolved", "Rejected"].includes(complaint.status) ? "overdue-date" : ""}`}>
+                  Deadline: {formatDate(complaint.deadline)}
+                  {complaint.deadline && new Date(complaint.deadline) < new Date() && !["Resolved", "Rejected"].includes(complaint.status) ? " (OVERDUE)" : ""}
+                </div>
+              ) : null}
+
+              {complaint.feedback?.rating ? (
+                <div className="small">
+                  Rating: {"★".repeat(complaint.feedback.rating)}{"☆".repeat(5 - complaint.feedback.rating)} ({complaint.feedback.rating}/5)
+                  {complaint.feedback.comment ? ` — "${complaint.feedback.comment}"` : ""}
+                </div>
+              ) : null}
 
               {hasMapLocation ? (
                 <div className="history-item-map">

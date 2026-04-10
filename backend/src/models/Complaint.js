@@ -99,7 +99,36 @@ const complaintSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
-    progressLogs: [progressLogSchema]
+    progressLogs: [progressLogSchema],
+
+    // Deadline & SLA Tracking
+    deadline: {
+      type: Date,
+      default: null
+    },
+    resolvedAt: {
+      type: Date,
+      default: null
+    },
+
+    // Citizen Feedback & Rating
+    feedback: {
+      rating: {
+        type: Number,
+        min: 1,
+        max: 5,
+        default: null
+      },
+      comment: {
+        type: String,
+        trim: true,
+        default: ""
+      },
+      submittedAt: {
+        type: Date,
+        default: null
+      }
+    }
   },
   { timestamps: true }
 );
