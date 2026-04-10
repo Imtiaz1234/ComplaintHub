@@ -3,6 +3,7 @@ import { Complaint, PRIORITY_VALUES, STATUS_VALUES, CATEGORY_VALUES } from "../m
 import { User } from "../models/User.js";
 import { Notification } from "../models/Notification.js";
 import { geocodeAddressToLatLng } from "../utils/geocode.js";
+import { uploadImage } from "../utils/uploadImage.js";
 
 const createComplaintId = () => {
   const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, "");
@@ -92,10 +93,11 @@ export const createComplaint = async (req, res) => {
       }
     }
 
-    const photo =
+    const rawPhoto =
       typeof submissionPhoto === "string" && submissionPhoto.trim().length > 0
         ? submissionPhoto.trim()
         : "";
+    const photo = await uploadImage(rawPhoto, "complainthub/submissions");
 
     const complaint = await Complaint.create({
       complaintId: createComplaintId(),
@@ -408,8 +410,9 @@ export const addProgressUpdate = async (req, res) => {
     }
 
     const logText = trimmedText || "Task marked as completed by assignee.";
-    const photo =
+    const rawPhoto =
       typeof photoUrl === "string" && photoUrl.trim().length > 0 ? photoUrl.trim() : "";
+    const photo = await uploadImage(rawPhoto, "complainthub/progress");
 
     complaint.progressLogs.push({
       text: logText,
