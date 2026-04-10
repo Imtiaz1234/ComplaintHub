@@ -148,6 +148,18 @@ export default function App() {
   // Category Reports state
   const [categoryReports, setCategoryReports] = useState([]);
 
+  // Theme state
+  const [theme, setTheme] = useState(() => {
+    return window.localStorage.getItem("complainthub-theme") || "light";
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    window.localStorage.setItem("complainthub-theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => setTheme((t) => (t === "light" ? "dark" : "light"));
+
   useEffect(() => {
     const rawUser = window.localStorage.getItem(STORAGE_KEY);
 
@@ -811,7 +823,12 @@ export default function App() {
     return (
       <div className="container auth-container">
         <section className="auth-hero">
-          <p className="eyebrow">ComplaintHub</p>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start" }}>
+            <p className="eyebrow">ComplaintHub</p>
+            <button type="button" className="theme-toggle" onClick={toggleTheme} title="Toggle theme">
+              {theme === "light" ? "🌙" : "☀️"}
+            </button>
+          </div>
           <h1>A platform where citizens can report city problems, raise their voices, and work together to make their community better.</h1>
           <p className="hero-copy">
             Log in first, then submit complaints, track status by complaint ID, browse complaint history and archive, and use the FAQ help center.
@@ -921,6 +938,9 @@ export default function App() {
             Signed in as <strong>{currentUser.fullName}</strong> ({currentUser.role})
           </div>
           <div className="header-actions">
+            <button type="button" className="theme-toggle" onClick={toggleTheme} title="Toggle theme">
+              {theme === "light" ? "🌙" : "☀️"}
+            </button>
             <div className="notification-wrapper">
               <button
                 type="button"
