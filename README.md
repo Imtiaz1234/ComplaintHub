@@ -9,7 +9,7 @@ Local problem reporting system built with the MERN stack and an MVC-style layout
 ### Authentication and roles
 
 - **Sign up / log in** (email + password; optional **OTP** flow for login).
-- **Roles:** Citizen, Worker, MP, Admin, Super Admin (admins can change roles in **User Management**).
+- **Roles:** Citizen, Worker, Leader, Admin, Super Admin (admins can change roles in **User Management**).
 - **Default admin** is created on server start if missing (see below).
 
 ### Complaints (Citizens)
@@ -34,9 +34,9 @@ Local problem reporting system built with the MERN stack and an MVC-style layout
 
 ### Assignment (Admins)
 
-- Assign a complaint to a user with role **Worker** or **MP**; status is set to **Assigned**.
+- Assign a complaint to a user with role **Worker** or **Leader**; status is set to **Assigned**.
 
-### Worker / MP progress
+### Worker / Leader progress
 
 - Assigned users see their complaints in **history** and in **Progress updates**.
 - Add **text** and optional **photo** proof, or use **Task completed** (logged with type `completed`).
@@ -45,7 +45,7 @@ Local problem reporting system built with the MERN stack and an MVC-style layout
 
 - **Citizens:** own complaints; filters All / Active / Archived.
 - **Admins:** all complaints.
-- **Workers / MPs:** complaints **assigned to them**, with the same filters.
+- **Workers / Leaders:** complaints **assigned to them**, with the same filters.
 
 ### Help
 
@@ -70,7 +70,7 @@ Local problem reporting system built with the MERN stack and an MVC-style layout
 ### Role-Based Access Control (RBAC)
 
 - **Citizen:** submit, track, comment, submit feedback on own complaints.
-- **Worker / MP:** view & update assigned complaints, post progress, comment.
+- **Worker / Leader:** view & update assigned complaints, post progress, comment.
 - **Admin:** everything above, plus assign, update status/priority/deadline, view reports/analytics, export, search & filter.
 - **Super Admin:** all admin capabilities, plus assign roles.
 - All admin endpoints (`filter`, `category-reports`, `analytics`, `export/csv`, `export/pdf`, status/priority/deadline/assign) enforce the caller's role server-side via `requesterId` / `adminId`.
@@ -112,7 +112,7 @@ Project_demo/
 
 ### Controller
 
-- **`complaintController.js`:** create (with optional geocode), read status/history/search, admin-only status/priority (`adminId`), assign worker/MP, worker progress posts, map locations list (API), etc.
+- **`complaintController.js`:** create (with optional geocode), read status/history/search, admin-only status/priority (`adminId`), assign worker/leader, worker progress posts, map locations list (API), etc.
 - **`authController.js`:** signup, login, OTP, users list, role updates, default admin.
 
 ### View
@@ -128,8 +128,8 @@ Project_demo/
 | GET | `/api/complaints` | List all (raw) |
 | GET | `/api/complaints/history` | Filtered history (`userId`, `role`, `archived`) |
 | GET | `/api/complaints/search` | Similar complaints (`q`) |
-| PATCH | `/api/complaints/:complaintId/assign` | Admin assigns Worker/MP |
-| POST | `/api/complaints/:complaintId/progress` | Worker/MP update or complete |
+| PATCH | `/api/complaints/:complaintId/assign` | Admin assigns Worker/Leader |
+| POST | `/api/complaints/:complaintId/progress` | Worker/Leader update or complete |
 | GET | `/api/complaints/:complaintId/status` | Public read by complaint ID |
 | PATCH | `/api/complaints/:complaintId/status` | Admin only (`adminId` + `status`) |
 | PATCH | `/api/complaints/:complaintId/priority` | Admin only (`adminId` + `priority`) |
@@ -139,7 +139,7 @@ Project_demo/
 | POST | `/api/complaints/:complaintId/feedback` | Citizen (owner, after Resolved) submits rating |
 | GET | `/api/complaints/filter` | Admin filter / search (`requesterId`) |
 | GET | `/api/complaints/category-reports` | Admin category breakdown (`requesterId`) |
-| GET | `/api/complaints/worker-dashboard` | Worker/MP stats (`workerId`) |
+| GET | `/api/complaints/worker-dashboard` | Worker/Leader stats (`workerId`) |
 | GET | `/api/complaints/analytics` | Admin analytics (`requesterId`) |
 | GET | `/api/complaints/export/csv` | Admin CSV export (`requesterId` + filters) |
 | GET | `/api/complaints/export/pdf` | Admin PDF export (`requesterId` + filters) |
@@ -202,7 +202,7 @@ Email: adminus@elonmusk.com
 Password: we_the_people
 ```
 
-Use **User Management** to promote accounts to **Worker** or **MP** for assignment testing.
+Use **User Management** to promote accounts to **Worker** or **Leader** for assignment testing.
 
 ---
 
@@ -212,6 +212,6 @@ Use **User Management** to promote accounts to **Worker** or **MP** for assignme
 2. Submit a complaint with an **address** and/or **GPS**, optional **photo**.
 3. Open **Complaint History** — confirm **mini map** on rows that have coordinates.
 4. **Track** by `complaintId` — see details, map, assignment, progress log.
-5. Log in as **admin** — set **priority** / **status**, **assign** to a Worker/MP.
+5. Log in as **admin** — set **priority** / **status**, **assign** to a Worker/Leader.
 6. Log in as **Worker** — add **progress** with optional photo; use **Task completed** when done.
 7. Switch history filters (**All / Active / Archived**) and confirm list + maps stay in sync for that view.

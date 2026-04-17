@@ -51,7 +51,7 @@ const CATEGORY_VALUES = [
   "Public Safety", "Noise & Pollution", "Parks & Recreation", "Transportation",
   "Building & Housing", "Other"
 ];
-const ROLE_ASSIGN_OPTIONS = ["Citizen", "Worker", "MP", "Admin"];
+const ROLE_ASSIGN_OPTIONS = ["Citizen", "Worker", "Leader", "Admin"];
 const STORAGE_KEY = "complainthub-user";
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 const MAX_DESCRIPTION = 1000;
@@ -74,12 +74,12 @@ const FAQ_WORKER = [
 ];
 
 const FAQ_ADMIN = [
-  { q: "How do I assign a complaint?", a: "Open Controls \u2192 Assign. Enter the complaint ID, pick a worker or MP, and optionally set a deadline." },
+  { q: "How do I assign a complaint?", a: "Open Controls \u2192 Assign. Enter the complaint ID, pick a worker or leader, and optionally set a deadline." },
   { q: "How do deadlines work?", a: "Deadlines help workers prioritize. Overdue tasks are flagged red on the worker dashboard and notifications are sent when a deadline changes." },
   { q: "What does Analytics show?", a: "Analytics shows complaint volume over time, resolution rate, average resolution time, status/priority/category breakdowns, worker performance, and citizen ratings." },
   { q: "How do I export reports?", a: "Open Reports and click Export CSV or Export PDF. Any filters you've applied in Complaints are carried over to the export." },
   { q: "Where are categorized reports?", a: "Reports shows a chart and breakdown (pending, assigned, in progress, resolved, rejected, resolution rate) by category." },
-  { q: "How does RBAC work?", a: "Citizens can only submit and track their own complaints. Workers/MPs see only assigned tasks. Admins can manage everything. Super Admins can additionally assign roles." },
+  { q: "How does RBAC work?", a: "Citizens can only submit and track their own complaints. Workers/Leaders see only assigned tasks. Admins can manage everything. Super Admins can additionally assign roles." },
   { q: "How do I filter complaints?", a: "Open Complaints. Combine status, category, priority, area, assignee, date range, and keywords. Active filters show as dismissible chips." }
 ];
 
@@ -186,6 +186,22 @@ export default function App() {
   const [activeView, setActiveView] = useState("overview");
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
+  // Theme (dark/light)
+  const [theme, setTheme] = useState(() => {
+    if (typeof window === "undefined") return "light";
+    const stored = window.localStorage.getItem("complaintHubTheme");
+    if (stored === "dark" || stored === "light") return stored;
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  });
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    document.documentElement.setAttribute("data-theme", theme);
+    try { window.localStorage.setItem("complaintHubTheme", theme); } catch {}
+  }, [theme]);
+
+  const toggleTheme = () => setTheme((t) => (t === "dark" ? "light" : "dark"));
+
   // Restore user
   useEffect(() => {
     const rawUser = window.localStorage.getItem(STORAGE_KEY);
@@ -195,7 +211,7 @@ export default function App() {
   }, []);
 
   const isAdmin = currentUser?.role === "Admin" || currentUser?.role === "Super Admin";
-  const isWorkerOrMp = currentUser?.role === "Worker" || currentUser?.role === "MP";
+  const isWorkerOrLeader = currentUser?.role === "Worker" || currentUser?.role === "Leader";
   const isCitizen = currentUser?.role === "Citizen";
 
   // Data loaders
@@ -219,7 +235,7 @@ export default function App() {
       const nextSelections = {};
       nextUsers.forEach((u) => { nextSelections[u.id] = u.role; });
       setRoleSelections(nextSelections);
-      const firstAssignable = nextUsers.find((u) => ["Worker", "MP"].includes(u.role));
+      const firstAssignable = nextUsers.find((u) => ["Worker", "Leader"].includes(u.role));
       setAssigneeUserId((previous) => previous || firstAssignable?.id || "");
     } catch { setUsers([]); setRoleSelections({}); }
   };
@@ -234,7 +250,7 @@ export default function App() {
   };
 
   const loadWorkerDashboard = async (user = currentUser) => {
-    if (!user || !["Worker", "MP"].includes(user.role)) { setWorkerDashData(null); return; }
+    if (!user || !["Worker", "Leader"].includes(user.role)) { setWorkerDashData(null); return; }
     try { setWorkerDashData(await getWorkerDashboard(user.id)); }
     catch { setWorkerDashData(null); }
   };
@@ -277,7 +293,7 @@ export default function App() {
 
   useEffect(() => {
     const role = currentUser?.role;
-    const isAssignable = role === "Worker" || role === "MP";
+    const isAssignable = role === "Worker" || role === "Leader";
     if (!isAssignable || complaints.length === 0) return undefined;
     setWorkComplaintId((prev) =>
       prev && complaints.some((i) => i.complaintId === prev) ? prev : complaints[0].complaintId
@@ -299,7 +315,7 @@ export default function App() {
         { id: "help", label: "Help", icon: "help" }
       ];
     }
-    if (isWorkerOrMp) {
+    if (isWorkerOrLeader) {
       return [
         { id: "overview", label: "Overview", icon: "dashboard" },
         { id: "tasks", label: "My Tasks", icon: "inbox" },
@@ -315,7 +331,7 @@ export default function App() {
       { id: "history", label: "History", icon: "history" },
       { id: "help", label: "Help", icon: "help" }
     ];
-  }, [isAdmin, isWorkerOrMp]);
+  }, [isAdmin, isWorkerOrLeader]);
 
   useEffect(() => {
     if (!navItems.some((n) => n.id === activeView)) {
@@ -679,6 +695,15 @@ export default function App() {
   if (!currentUser) {
     return (
       <div className="auth-shell">
+        <button
+          type="button"
+          className="icon-button icon-button-ghost auth-theme-toggle"
+          onClick={toggleTheme}
+          aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+          title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+        >
+          <Icon name={theme === "dark" ? "sun" : "moon"} size={18} />
+        </button>
         <section className="auth-brand">
           <div className="auth-brand-header">
             <div className="brand-logo" aria-hidden="true">
@@ -817,14 +842,14 @@ export default function App() {
      AUTHENTICATED SHELL
      ========================== */
   const topbarTitles = {
-    overview: { title: "Overview", subtitle: isAdmin ? "Manage complaints and monitor platform activity." : isWorkerOrMp ? "Your assigned work at a glance." : "Your complaints and activity." },
+    overview: { title: "Overview", subtitle: isAdmin ? "Manage complaints and monitor platform activity." : isWorkerOrLeader ? "Your assigned work at a glance." : "Your complaints and activity." },
     submit: { title: "Submit Complaint", subtitle: "Describe the issue, add photo and location, and we'll take it from there." },
     track: { title: "Track by Complaint ID", subtitle: "Enter an ID to see the status timeline, location, and discussion." },
     history: { title: "History & Archive", subtitle: "Your past complaints with filters." },
     complaints: { title: "Search & Filter Complaints", subtitle: "Combine filters to find complaints instantly." },
     tasks: { title: "My Tasks", subtitle: "Assigned work with deadlines and priorities." },
     progress: { title: "Post a Progress Update", subtitle: "Log progress, attach proof, and mark tasks complete." },
-    users: { title: "User Management", subtitle: "Assign roles across Citizen, Worker, MP, and Admin." },
+    users: { title: "User Management", subtitle: "Assign roles across Citizen, Worker, Leader, and Admin." },
     controls: { title: "Complaint Controls", subtitle: "Update status, priority, deadlines, and assign work." },
     analytics: { title: "Analytics Dashboard", subtitle: "Volume, resolution times, worker performance and citizen ratings." },
     reports: { title: "Reports & Exports", subtitle: "Category breakdown, resolution rate, and CSV / PDF exports." },
@@ -862,6 +887,8 @@ export default function App() {
           onMarkNotificationRead={handleMarkNotificationRead}
           onMarkAllRead={handleMarkAllRead}
           onOpenMobileNav={() => setMobileNavOpen(true)}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
 
         <main className="app-content">
@@ -874,7 +901,7 @@ export default function App() {
                 <p>
                   {isAdmin
                     ? "Keep complaints moving \u2014 assign workers, set deadlines, and track resolution rates."
-                    : isWorkerOrMp
+                    : isWorkerOrLeader
                       ? "Stay on top of your assigned tasks and post updates the moment something changes."
                       : "Report city problems, track progress in real time, and join the discussion."}
                 </p>
@@ -888,16 +915,16 @@ export default function App() {
                   </div>
                   <span className={`pill pill-role pill-role-${roleKey(currentUser.role)}`}>{currentUser.role}</span>
                 </div>
-                <div className={isWorkerOrMp && workerDashData ? "dashboard-grid dashboard-grid-6" : "dashboard-grid"}>
+                <div className={isWorkerOrLeader && workerDashData ? "dashboard-grid dashboard-grid-6" : "dashboard-grid"}>
                   <div className="dashboard-stat">
-                    <span className="stat-label">{isCitizen ? "Your Complaints" : isWorkerOrMp ? "Total Assigned" : "Total Complaints"}</span>
-                    <strong>{isWorkerOrMp && workerDashData ? workerDashData.stats.totalAssigned : totalComplaints}</strong>
+                    <span className="stat-label">{isCitizen ? "Your Complaints" : isWorkerOrLeader ? "Total Assigned" : "Total Complaints"}</span>
+                    <strong>{isWorkerOrLeader && workerDashData ? workerDashData.stats.totalAssigned : totalComplaints}</strong>
                   </div>
                   <div className="dashboard-stat">
                     <span className="stat-label">Active</span>
-                    <strong>{isWorkerOrMp && workerDashData ? workerDashData.stats.totalPending : activeComplaintsCount}</strong>
+                    <strong>{isWorkerOrLeader && workerDashData ? workerDashData.stats.totalPending : activeComplaintsCount}</strong>
                   </div>
-                  {isWorkerOrMp && workerDashData ? (
+                  {isWorkerOrLeader && workerDashData ? (
                     <>
                       <div className={`dashboard-stat ${workerDashData.stats.overdueCount > 0 ? "dashboard-stat-alert" : ""}`}>
                         <span className="stat-label">Overdue</span>
@@ -953,7 +980,7 @@ export default function App() {
                 </section>
               ) : null}
 
-              {isWorkerOrMp && workerDashData ? (
+              {isWorkerOrLeader && workerDashData ? (
                 <section className="card">
                   <div className="section-heading">
                     <div>
@@ -1211,7 +1238,7 @@ export default function App() {
           ) : null}
 
           {/* ===== TASKS (worker) ===== */}
-          {activeView === "tasks" && isWorkerOrMp ? (
+          {activeView === "tasks" && isWorkerOrLeader ? (
             <>
               {workerDashData ? (
                 <section className="card">
@@ -1268,7 +1295,7 @@ export default function App() {
           ) : null}
 
           {/* ===== WORKER PROGRESS POST ===== */}
-          {activeView === "progress" && isWorkerOrMp ? (
+          {activeView === "progress" && isWorkerOrLeader ? (
             <section className="card">
               <h3>Post a progress update</h3>
               <p className="small muted">Describe what you did on site, optionally attach a photo, and mark the task complete when finished.</p>
@@ -1375,7 +1402,7 @@ export default function App() {
                         <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)}>
                           <option value="">Anyone</option>
                           <option value="unassigned">Unassigned</option>
-                          {users.filter((u) => ["Worker", "MP"].includes(u.role)).map((u) => (
+                          {users.filter((u) => ["Worker", "Leader"].includes(u.role)).map((u) => (
                             <option key={u.id} value={u.id}>{u.fullName} ({u.role})</option>
                           ))}
                         </select>
@@ -1437,7 +1464,7 @@ export default function App() {
           {activeView === "users" && isAdmin ? (
             <section className="card">
               <h3>User management</h3>
-              <p className="small muted">Assign roles as Citizen, Worker, MP, or Admin for any registered user.</p>
+              <p className="small muted">Assign roles as Citizen, Worker, Leader, or Admin for any registered user.</p>
               {userAdminMessage ? <div className="small" style={{ marginBottom: "8px" }}>{userAdminMessage}</div> : null}
               {users.length === 0 ? (
                 <div className="empty-state">
@@ -1509,7 +1536,7 @@ export default function App() {
               </section>
 
               <section className="card">
-                <h3>Assign to worker or MP</h3>
+                <h3>Assign to worker or leader</h3>
                 <p className="small muted">Route a complaint and optionally set a deadline.</p>
                 <form onSubmit={handleAssignComplaint}>
                   <label>Complaint ID</label>
@@ -1517,8 +1544,8 @@ export default function App() {
 
                   <label>Assignee</label>
                   <select value={assigneeUserId} onChange={(e) => setAssigneeUserId(e.target.value)} required>
-                    <option value="" disabled>Select worker or MP</option>
-                    {users.filter((u) => ["Worker", "MP"].includes(u.role)).map((u) => (
+                    <option value="" disabled>Select worker or leader</option>
+                    {users.filter((u) => ["Worker", "Leader"].includes(u.role)).map((u) => (
                       <option key={u.id} value={u.id}>{u.fullName} ({u.role})</option>
                     ))}
                   </select>
@@ -1531,9 +1558,9 @@ export default function App() {
                   </button>
                 </form>
                 {assignMessage ? <div className="small" style={{ marginTop: "10px" }}>{assignMessage}</div> : null}
-                {users.filter((u) => ["Worker", "MP"].includes(u.role)).length === 0 ? (
+                {users.filter((u) => ["Worker", "Leader"].includes(u.role)).length === 0 ? (
                   <div className="small muted" style={{ marginTop: "10px" }}>
-                    No Worker or MP users yet. Promote accounts under Users first.
+                    No Worker or Leader users yet. Promote accounts under Users first.
                   </div>
                 ) : null}
               </section>
@@ -1658,7 +1685,7 @@ export default function App() {
             <section className="card">
               <h3>Help Center</h3>
               <p className="small muted">Answers to the most common questions about ComplaintHub.</p>
-              <FaqAccordion items={isAdmin ? FAQ_ADMIN : isWorkerOrMp ? FAQ_WORKER : FAQ_CITIZEN} />
+              <FaqAccordion items={isAdmin ? FAQ_ADMIN : isWorkerOrLeader ? FAQ_WORKER : FAQ_CITIZEN} />
             </section>
           ) : null}
         </main>

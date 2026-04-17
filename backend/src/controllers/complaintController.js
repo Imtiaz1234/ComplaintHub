@@ -273,7 +273,7 @@ export const getComplaintHistory = async (req, res) => {
 
     if (role === "Admin" || role === "Super Admin") {
       // Admins see all complaints; only archived filter applies.
-    } else if (role === "Worker" || role === "MP") {
+    } else if (role === "Worker" || role === "Leader") {
       if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
         return res.status(400).json({ message: "userId is required for worker assignment lookup." });
       }
@@ -351,8 +351,8 @@ export const assignComplaint = async (req, res) => {
 
     const assignee = await User.findById(assigneeUserId);
 
-    if (!assignee || !["Worker", "MP"].includes(assignee.role)) {
-      return res.status(400).json({ message: "Complaints can only be assigned to users with Worker or MP role." });
+    if (!assignee || !["Worker", "Leader"].includes(assignee.role)) {
+      return res.status(400).json({ message: "Complaints can only be assigned to users with Worker or Leader role." });
     }
 
     const update = {
@@ -470,8 +470,8 @@ export const addProgressUpdate = async (req, res) => {
 
     const worker = await User.findById(workerId);
 
-    if (!worker || !["Worker", "MP"].includes(worker.role)) {
-      return res.status(403).json({ message: "Only workers or MPs can submit progress updates." });
+    if (!worker || !["Worker", "Leader"].includes(worker.role)) {
+      return res.status(403).json({ message: "Only workers or leaders can submit progress updates." });
     }
 
     const complaint = await Complaint.findOne({ complaintId });
@@ -758,8 +758,8 @@ export const getWorkerDashboard = async (req, res) => {
 
     const worker = await User.findById(workerId);
 
-    if (!worker || !["Worker", "MP"].includes(worker.role)) {
-      return res.status(403).json({ message: "Only workers or MPs can access the worker dashboard." });
+    if (!worker || !["Worker", "Leader"].includes(worker.role)) {
+      return res.status(403).json({ message: "Only workers or leaders can access the worker dashboard." });
     }
 
     const assigned = await Complaint.find({

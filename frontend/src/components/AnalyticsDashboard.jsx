@@ -305,7 +305,7 @@ export default function AnalyticsDashboard({ data, onRefresh, loading }) {
           <div className="empty-state">
             <div className="empty-state-icon"><Icon name="users" size={22} /></div>
             <div className="empty-state-title">No workers yet</div>
-            <div className="small muted">Assign complaints to workers or MPs to start collecting data.</div>
+            <div className="small muted">Assign complaints to workers or leaders to start collecting data.</div>
           </div>
         ) : (
           <div className="category-reports-table-wrap">

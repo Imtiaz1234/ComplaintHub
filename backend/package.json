@@ -5,7 +5,8 @@
   "main": "src/app.js",
   "scripts": {
     "dev": "nodemon src/app.js",
-    "start": "node src/app.js"
+    "start": "node src/app.js",
+    "migrate:mp-to-leader": "node scripts/migrate-mp-to-leader.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

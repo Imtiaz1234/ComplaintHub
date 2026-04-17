@@ -312,8 +312,8 @@ export const updateUserRole = async (req, res) => {
       return res.status(403).json({ message: "Only admins can update user roles." });
     }
 
-    if (!["Citizen", "Worker", "MP", "Admin"].includes(role)) {
-      return res.status(400).json({ message: "Role must be Citizen, Worker, MP, or Admin." });
+    if (!["Citizen", "Worker", "Leader", "Admin"].includes(role)) {
+      return res.status(400).json({ message: "Role must be Citizen, Worker, Leader, or Admin." });
     }
 
     const user = await User.findById(userId);
