@@ -4,6 +4,7 @@ import cors from "cors";
 import { ensureDefaultAdmin } from "./controllers/authController.js";
 import authRoutes from "./routes/authRoutes.js";
 import complaintRoutes from "./routes/complaintRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 import { connectDB } from "./config/db.js";
 
 dotenv.config();
@@ -20,6 +21,7 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/auth", authRoutes);
 app.use("/api/complaints", complaintRoutes);
+app.use("/api/notifications", notificationRoutes);
 
 connectDB()
   .then(async () => {

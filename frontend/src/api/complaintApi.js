@@ -181,13 +181,29 @@ export const getUsers = async (requesterId) => {
   return response.json();
 };
 
-export const assignComplaint = async (complaintId, { adminId, assigneeUserId }) => {
+export const assignComplaint = async (complaintId, { adminId, assigneeUserId, deadline }) => {
   const response = await fetch(`${API_BASE_URL}/complaints/${encodeURIComponent(complaintId)}/assign`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({ adminId, assigneeUserId })
+    body: JSON.stringify({ adminId, assigneeUserId, deadline })
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+};
+
+export const updateComplaintDeadline = async (complaintId, { adminId, deadline }) => {
+  const response = await fetch(`${API_BASE_URL}/complaints/${encodeURIComponent(complaintId)}/deadline`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ adminId, deadline })
   });
 
   if (!response.ok) {
@@ -220,6 +236,111 @@ export const updateUserRole = async ({ requesterId, userId, role }) => {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({ requesterId, role })
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+};
+
+export const filterComplaints = async (params) => {
+  const query = new URLSearchParams();
+
+  if (params.status) query.set("status", params.status);
+  if (params.category) query.set("category", params.category);
+  if (params.priority) query.set("priority", params.priority);
+  if (params.area) query.set("area", params.area);
+  if (params.dateFrom) query.set("dateFrom", params.dateFrom);
+  if (params.dateTo) query.set("dateTo", params.dateTo);
+  if (params.keyword) query.set("keyword", params.keyword);
+  if (params.assignee) query.set("assignee", params.assignee);
+
+  const response = await fetch(`${API_BASE_URL}/complaints/filter?${query.toString()}`);
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+};
+
+export const addComment = async (complaintId, { userId, text }) => {
+  const response = await fetch(`${API_BASE_URL}/complaints/${encodeURIComponent(complaintId)}/comments`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ userId, text })
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+};
+
+export const getComments = async (complaintId) => {
+  const response = await fetch(`${API_BASE_URL}/complaints/${encodeURIComponent(complaintId)}/comments`);
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+};
+
+export const getCategoryReports = async () => {
+  const response = await fetch(`${API_BASE_URL}/complaints/category-reports`);
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+};
+
+export const getWorkerDashboard = async (workerId) => {
+  const response = await fetch(`${API_BASE_URL}/complaints/worker-dashboard?workerId=${encodeURIComponent(workerId)}`);
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+};
+
+export const getNotifications = async (userId) => {
+  const response = await fetch(`${API_BASE_URL}/notifications?userId=${encodeURIComponent(userId)}`);
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+};
+
+export const markNotificationRead = async (notificationId) => {
+  const response = await fetch(`${API_BASE_URL}/notifications/${notificationId}/read`, {
+    method: "PATCH"
+  });
+
+  if (!response.ok) {
+    throw new Error(await parseError(response));
+  }
+
+  return response.json();
+};
+
+export const markAllNotificationsRead = async (userId) => {
+  const response = await fetch(`${API_BASE_URL}/notifications/read-all`, {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ userId })
   });
 
   if (!response.ok) {
