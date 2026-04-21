@@ -74,7 +74,7 @@ const FAQ_WORKER = [
 ];
 
 const FAQ_ADMIN = [
-  { q: "How do I assign a complaint?", a: "Open Controls \u2192 Assign. Enter the complaint ID, pick a worker or leader, and optionally set a deadline." },
+  { q: "How do I assign a complaint?", a: "Open Controls \u2192 Assign. Enter the complaint ID, pick a Leader, and optionally set a deadline. The Leader will then delegate to a worker." },
   { q: "How do deadlines work?", a: "Deadlines help workers prioritize. Overdue tasks are flagged red on the worker dashboard and notifications are sent when a deadline changes." },
   { q: "What does Analytics show?", a: "Analytics shows complaint volume over time, resolution rate, average resolution time, status/priority/category breakdowns, worker performance, and citizen ratings." },
   { q: "How do I export reports?", a: "Open Reports and click Export CSV or Export PDF. Any filters you've applied in Complaints are carried over to the export." },
@@ -106,6 +106,7 @@ export default function App() {
   const [authMessage, setAuthMessage] = useState("");
   const [authError, setAuthError] = useState("");
   const [currentUser, setCurrentUser] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Submit complaint
   const [title, setTitle] = useState("");
@@ -211,7 +212,10 @@ export default function App() {
   }, []);
 
   const isAdmin = currentUser?.role === "Admin" || currentUser?.role === "Super Admin";
-  const isWorkerOrLeader = currentUser?.role === "Worker" || currentUser?.role === "Leader";
+  const isLeader = currentUser?.role === "Leader";
+  const isWorker = currentUser?.role === "Worker";
+  const isWorkerOrLeader = isWorker || isLeader;
+  const isAdminOrLeader = isAdmin || isLeader;
   const isCitizen = currentUser?.role === "Citizen";
 
   // Data loaders
@@ -228,14 +232,15 @@ export default function App() {
   };
 
   const loadUsers = async (user = currentUser) => {
-    if (!user || !["Admin", "Super Admin"].includes(user.role)) { setUsers([]); return; }
+    if (!user || !["Admin", "Super Admin", "Leader"].includes(user.role)) { setUsers([]); return; }
     try {
       const nextUsers = await getUsers(user.id);
       setUsers(nextUsers);
       const nextSelections = {};
       nextUsers.forEach((u) => { nextSelections[u.id] = u.role; });
       setRoleSelections(nextSelections);
-      const firstAssignable = nextUsers.find((u) => ["Worker", "Leader"].includes(u.role));
+      const assignableRoles = user.role === "Leader" ? ["Worker"] : ["Leader"];
+      const firstAssignable = nextUsers.find((u) => assignableRoles.includes(u.role));
       setAssigneeUserId((previous) => previous || firstAssignable?.id || "");
     } catch { setUsers([]); setRoleSelections({}); }
   };
@@ -256,13 +261,13 @@ export default function App() {
   };
 
   const loadCategoryReports = async (user = currentUser) => {
-    if (!user || !["Admin", "Super Admin"].includes(user.role)) { setCategoryReports([]); return; }
+    if (!user || !["Admin", "Super Admin", "Leader"].includes(user.role)) { setCategoryReports([]); return; }
     try { setCategoryReports(await getCategoryReports(user.id)); }
     catch { setCategoryReports([]); }
   };
 
   const loadAnalytics = async (user = currentUser) => {
-    if (!user || !["Admin", "Super Admin"].includes(user.role)) { setAnalyticsData(null); return; }
+    if (!user || !["Admin", "Super Admin", "Leader"].includes(user.role)) { setAnalyticsData(null); return; }
     setAnalyticsLoading(true);
     try { setAnalyticsData(await getAnalytics(user.id)); }
     catch { setAnalyticsData(null); }
@@ -315,10 +320,24 @@ export default function App() {
         { id: "help", label: "Help", icon: "help" }
       ];
     }
-    if (isWorkerOrLeader) {
+    if (isLeader) {
+      return [
+        { id: "overview", label: "Overview", icon: "dashboard" },
+        { id: "analytics", label: "Analytics", icon: "chart" },
+        { id: "complaints", label: "Complaints", icon: "search" },
+        { id: "tasks", label: "My Tasks", icon: "inbox" },
+        { id: "progress", label: "Post Update", icon: "upload" },
+        { id: "controls", label: "Controls", icon: "settings" },
+        { id: "reports", label: "Reports", icon: "upload" },
+        { id: "track", label: "Track", icon: "map" },
+        { id: "help", label: "Help", icon: "help" }
+      ];
+    }
+    if (isWorker) {
       return [
         { id: "overview", label: "Overview", icon: "dashboard" },
         { id: "tasks", label: "My Tasks", icon: "inbox" },
+        { id: "complaints", label: "Complaints", icon: "search" },
         { id: "progress", label: "Post Update", icon: "upload" },
         { id: "track", label: "Track", icon: "map" },
         { id: "help", label: "Help", icon: "help" }
@@ -331,7 +350,7 @@ export default function App() {
       { id: "history", label: "History", icon: "history" },
       { id: "help", label: "Help", icon: "help" }
     ];
-  }, [isAdmin, isWorkerOrLeader]);
+  }, [isAdmin, isLeader, isWorker]);
 
   useEffect(() => {
     if (!navItems.some((n) => n.id === activeView)) {
@@ -411,7 +430,7 @@ export default function App() {
     setAuthError(""); setAuthMessage(""); setRoleSelections({});
     setAuthMode("login"); setLoginMethod("password");
     setFullName(""); setEmail(""); setPhone(""); setPassword("");
-    setOtpCode(""); setOtpPreview("");
+    setOtpCode(""); setOtpPreview(""); setShowPassword(false);
     setNotifications([]); setUnreadCount(0); setShowNotifications(false);
     setWorkerDashData(null); setCategoryReports([]);
     setAnalyticsData(null); setExporting(false); setToast(null);
@@ -782,7 +801,23 @@ export default function App() {
                   <label>Phone (optional)</label>
                   <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+8801XXXXXXXXX" />
                   <label>Password</label>
-                  <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                  <div className="password-field">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                    />
+                    <button
+                      type="button"
+                      className="password-toggle"
+                      onClick={() => setShowPassword((v) => !v)}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      title={showPassword ? "Hide password" : "Show password"}
+                    >
+                      {showPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
                 </>
               ) : (
                 <>
@@ -809,7 +844,23 @@ export default function App() {
                   {loginMethod === "password" ? (
                     <>
                       <label>Password</label>
-                      <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                      <div className="password-field">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                        />
+                        <button
+                          type="button"
+                          className="password-toggle"
+                          onClick={() => setShowPassword((v) => !v)}
+                          aria-label={showPassword ? "Hide password" : "Show password"}
+                          title={showPassword ? "Hide password" : "Show password"}
+                        >
+                          {showPassword ? "Hide" : "Show"}
+                        </button>
+                      </div>
                     </>
                   ) : (
                     <>
@@ -1336,8 +1387,8 @@ export default function App() {
             </section>
           ) : null}
 
-          {/* ===== ADMIN: COMPLAINTS (search + filter + history) ===== */}
-          {activeView === "complaints" && isAdmin ? (
+          {/* ===== COMPLAINTS (search + filter + history) — Admin, Leader, Worker ===== */}
+          {activeView === "complaints" && (isAdminOrLeader || isWorker) ? (
             <>
               <section className="card">
                 <div className="section-heading">
@@ -1397,16 +1448,18 @@ export default function App() {
                         <label>Date to</label>
                         <input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} />
                       </div>
-                      <div>
-                        <label>Assignee</label>
-                        <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)}>
-                          <option value="">Anyone</option>
-                          <option value="unassigned">Unassigned</option>
-                          {users.filter((u) => ["Worker", "Leader"].includes(u.role)).map((u) => (
-                            <option key={u.id} value={u.id}>{u.fullName} ({u.role})</option>
-                          ))}
-                        </select>
-                      </div>
+                      {isWorker ? null : (
+                        <div>
+                          <label>Assignee</label>
+                          <select value={filterAssignee} onChange={(e) => setFilterAssignee(e.target.value)}>
+                            <option value="">Anyone</option>
+                            <option value="unassigned">Unassigned</option>
+                            {users.filter((u) => ["Worker", "Leader"].includes(u.role)).map((u) => (
+                              <option key={u.id} value={u.id}>{u.fullName} ({u.role})</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                     </div>
 
                     <label>Keyword</label>
@@ -1500,31 +1553,39 @@ export default function App() {
             </section>
           ) : null}
 
-          {/* ===== ADMIN: CONTROLS ===== */}
-          {activeView === "controls" && isAdmin ? (
+          {/* ===== CONTROLS (Admin full, Leader: assign + deadline) ===== */}
+          {activeView === "controls" && isAdminOrLeader ? (
             <>
               <section className="card">
                 <h3>Complaint controls</h3>
-                <p className="small muted">Update status, priority, or deadline for any complaint by ID.</p>
+                <p className="small muted">
+                  {isAdmin
+                    ? "Update status, priority, or deadline for any complaint by ID."
+                    : "Set or update the SLA deadline for a complaint assigned to you."}
+                </p>
                 <label>Complaint ID</label>
                 <input value={adminId} onChange={(e) => setAdminId(e.target.value)} placeholder="CMP-YYYYMMDD-XXXXXX" />
 
                 <div className="admin-action-grid">
-                  <form onSubmit={handleAdminUpdate} className="admin-action">
-                    <label>New status</label>
-                    <select value={adminStatus} onChange={(e) => setAdminStatus(e.target.value)}>
-                      {STATUS_VALUES.map((s) => <option key={s} value={s}>{s}</option>)}
-                    </select>
-                    <button type="submit">Update status</button>
-                  </form>
+                  {isAdmin ? (
+                    <form onSubmit={handleAdminUpdate} className="admin-action">
+                      <label>New status</label>
+                      <select value={adminStatus} onChange={(e) => setAdminStatus(e.target.value)}>
+                        {STATUS_VALUES.map((s) => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <button type="submit">Update status</button>
+                    </form>
+                  ) : null}
 
-                  <form onSubmit={handlePriorityUpdate} className="admin-action">
-                    <label>Priority</label>
-                    <select value={adminPriority} onChange={(e) => setAdminPriority(e.target.value)}>
-                      {PRIORITY_VALUES.map((p) => <option key={p} value={p}>{p}</option>)}
-                    </select>
-                    <button type="submit">Update priority</button>
-                  </form>
+                  {isAdmin ? (
+                    <form onSubmit={handlePriorityUpdate} className="admin-action">
+                      <label>Priority</label>
+                      <select value={adminPriority} onChange={(e) => setAdminPriority(e.target.value)}>
+                        {PRIORITY_VALUES.map((p) => <option key={p} value={p}>{p}</option>)}
+                      </select>
+                      <button type="submit">Update priority</button>
+                    </form>
+                  ) : null}
 
                   <form onSubmit={handleDeadlineUpdate} className="admin-action">
                     <label>Deadline</label>
@@ -1536,18 +1597,24 @@ export default function App() {
               </section>
 
               <section className="card">
-                <h3>Assign to worker or leader</h3>
-                <p className="small muted">Route a complaint and optionally set a deadline.</p>
+                <h3>{isLeader ? "Assign to a worker" : "Assign to a leader"}</h3>
+                <p className="small muted">
+                  {isLeader
+                    ? "Route a complaint assigned to you forward to a specific worker, and optionally set a deadline."
+                    : "Route a complaint to a Leader, who will then delegate it to the right worker."}
+                </p>
                 <form onSubmit={handleAssignComplaint}>
                   <label>Complaint ID</label>
                   <input value={adminId} onChange={(e) => setAdminId(e.target.value)} required />
 
                   <label>Assignee</label>
                   <select value={assigneeUserId} onChange={(e) => setAssigneeUserId(e.target.value)} required>
-                    <option value="" disabled>Select worker or leader</option>
-                    {users.filter((u) => ["Worker", "Leader"].includes(u.role)).map((u) => (
-                      <option key={u.id} value={u.id}>{u.fullName} ({u.role})</option>
-                    ))}
+                    <option value="" disabled>{isLeader ? "Select a worker" : "Select a leader"}</option>
+                    {users
+                      .filter((u) => (isLeader ? u.role === "Worker" : u.role === "Leader"))
+                      .map((u) => (
+                        <option key={u.id} value={u.id}>{u.fullName} ({u.role})</option>
+                      ))}
                   </select>
 
                   <label>Deadline (optional)</label>
@@ -1558,17 +1625,19 @@ export default function App() {
                   </button>
                 </form>
                 {assignMessage ? <div className="small" style={{ marginTop: "10px" }}>{assignMessage}</div> : null}
-                {users.filter((u) => ["Worker", "Leader"].includes(u.role)).length === 0 ? (
+                {users.filter((u) => (isLeader ? u.role === "Worker" : u.role === "Leader")).length === 0 ? (
                   <div className="small muted" style={{ marginTop: "10px" }}>
-                    No Worker or Leader users yet. Promote accounts under Users first.
+                    {isLeader
+                      ? "No Worker users are available yet. Ask an Admin to promote accounts under Users."
+                      : "No Leader users yet. Promote accounts to Leader under Users first."}
                   </div>
                 ) : null}
               </section>
             </>
           ) : null}
 
-          {/* ===== ADMIN: REPORTS ===== */}
-          {activeView === "analytics" && isAdmin ? (
+          {/* ===== ANALYTICS — Admin, Leader ===== */}
+          {activeView === "analytics" && isAdminOrLeader ? (
             <section className="card">
               <div className="section-heading">
                 <div>
@@ -1602,7 +1671,7 @@ export default function App() {
             </section>
           ) : null}
 
-          {activeView === "reports" && isAdmin ? (
+          {activeView === "reports" && isAdminOrLeader ? (
             <section className="card">
               <div className="section-heading">
                 <div>

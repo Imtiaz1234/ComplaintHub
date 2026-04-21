@@ -26,6 +26,8 @@ const requireRoleUser = async (userId, allowedRoles) => {
 };
 
 const requireAdminUser = (adminId) => requireRoleUser(adminId, ["Admin", "Super Admin"]);
+const requireAdminOrLeader = (userId) => requireRoleUser(userId, ["Admin", "Super Admin", "Leader"]);
+const requireStaffUser = (userId) => requireRoleUser(userId, ["Admin", "Super Admin", "Leader", "Worker"]);
 
 export const createComplaint = async (req, res) => {
   try {
@@ -339,10 +341,10 @@ export const assignComplaint = async (req, res) => {
     const { complaintId } = req.params;
     const { adminId, assigneeUserId, deadline } = req.body;
 
-    const admin = await requireAdminUser(adminId);
+    const requester = await requireAdminOrLeader(adminId);
 
-    if (!admin) {
-      return res.status(403).json({ message: "Only admins can assign complaints." });
+    if (!requester) {
+      return res.status(403).json({ message: "Only admins or leaders can assign complaints." });
     }
 
     if (!assigneeUserId || !mongoose.Types.ObjectId.isValid(assigneeUserId)) {
@@ -350,9 +352,15 @@ export const assignComplaint = async (req, res) => {
     }
 
     const assignee = await User.findById(assigneeUserId);
+    const isRequesterLeader = requester.role === "Leader";
+    const allowedAssigneeRoles = isRequesterLeader ? ["Worker"] : ["Leader"];
 
-    if (!assignee || !["Worker", "Leader"].includes(assignee.role)) {
-      return res.status(400).json({ message: "Complaints can only be assigned to users with Worker or Leader role." });
+    if (!assignee || !allowedAssigneeRoles.includes(assignee.role)) {
+      return res.status(400).json({
+        message: isRequesterLeader
+          ? "Leaders can only assign complaints to users with the Worker role."
+          : "Admins can only assign complaints to users with the Leader role."
+      });
     }
 
     const update = {
@@ -411,10 +419,10 @@ export const updateComplaintDeadline = async (req, res) => {
     const { complaintId } = req.params;
     const { adminId, deadline } = req.body;
 
-    const admin = await requireAdminUser(adminId);
+    const requester = await requireAdminOrLeader(adminId);
 
-    if (!admin) {
-      return res.status(403).json({ message: "Only admins can change complaint deadlines." });
+    if (!requester) {
+      return res.status(403).json({ message: "Only admins or leaders can change complaint deadlines." });
     }
 
     let parsedDeadline = null;
@@ -556,14 +564,18 @@ export const getSimilarComplaints = async (req, res) => {
 
 export const filterComplaints = async (req, res) => {
   try {
-    const admin = await requireAdminUser(req.query.requesterId);
+    const requester = await requireStaffUser(req.query.requesterId);
 
-    if (!admin) {
-      return res.status(403).json({ message: "Only admins can search and filter across all complaints." });
+    if (!requester) {
+      return res.status(403).json({ message: "Only staff (Admin, Leader, or Worker) can filter complaints." });
     }
 
     const { status, category, priority, area, dateFrom, dateTo, keyword, assignee } = req.query;
     const filter = {};
+
+    if (requester.role === "Worker") {
+      filter.assignedTo = requester._id;
+    }
 
     if (status && STATUS_VALUES.includes(status)) {
       filter.status = status;
@@ -577,10 +589,12 @@ export const filterComplaints = async (req, res) => {
       filter.priority = priority;
     }
 
-    if (assignee === "unassigned") {
-      filter.assignedTo = null;
-    } else if (assignee && mongoose.Types.ObjectId.isValid(assignee)) {
-      filter.assignedTo = assignee;
+    if (requester.role !== "Worker") {
+      if (assignee === "unassigned") {
+        filter.assignedTo = null;
+      } else if (assignee && mongoose.Types.ObjectId.isValid(assignee)) {
+        filter.assignedTo = assignee;
+      }
     }
 
     if (area && area.trim().length >= 2) {
@@ -708,10 +722,10 @@ export const getComments = async (req, res) => {
 
 export const getCategoryReports = async (req, res) => {
   try {
-    const admin = await requireAdminUser(req.query.requesterId);
+    const requester = await requireAdminOrLeader(req.query.requesterId);
 
-    if (!admin) {
-      return res.status(403).json({ message: "Only admins can view category reports." });
+    if (!requester) {
+      return res.status(403).json({ message: "Only admins or leaders can view category reports." });
     }
 
     const pipeline = [
@@ -916,10 +930,10 @@ export const submitFeedback = async (req, res) => {
 export const getAnalytics = async (req, res) => {
   try {
     const { requesterId } = req.query;
-    const admin = await requireAdminUser(requesterId);
+    const requester = await requireAdminOrLeader(requesterId);
 
-    if (!admin) {
-      return res.status(403).json({ message: "Only admins can view analytics." });
+    if (!requester) {
+      return res.status(403).json({ message: "Only admins or leaders can view analytics." });
     }
 
     const now = new Date();
@@ -1145,10 +1159,10 @@ const csvEscape = (value) => {
 
 export const exportComplaintsCsv = async (req, res) => {
   try {
-    const admin = await requireAdminUser(req.query.requesterId);
+    const requester = await requireAdminOrLeader(req.query.requesterId);
 
-    if (!admin) {
-      return res.status(403).json({ message: "Only admins can export reports." });
+    if (!requester) {
+      return res.status(403).json({ message: "Only admins or leaders can export reports." });
     }
 
     const filter = buildExportFilter(req.query);
@@ -1262,10 +1276,10 @@ const drawPdfFooter = (doc, pageNumber, totalText) => {
 
 export const exportComplaintsPdf = async (req, res) => {
   try {
-    const admin = await requireAdminUser(req.query.requesterId);
+    const requester = await requireAdminOrLeader(req.query.requesterId);
 
-    if (!admin) {
-      return res.status(403).json({ message: "Only admins can export reports." });
+    if (!requester) {
+      return res.status(403).json({ message: "Only admins or leaders can export reports." });
     }
 
     const filter = buildExportFilter(req.query);
@@ -1291,7 +1305,7 @@ export const exportComplaintsPdf = async (req, res) => {
     const stamp = new Date().toLocaleString();
     doc.font("Helvetica").fontSize(9).fillColor("#cbd5e1")
       .text(stamp, 40, 22, { width: doc.page.width - 80, align: "right", lineBreak: false })
-      .text(`${admin.fullName} · ${admin.role}`, 40, 38, { width: doc.page.width - 80, align: "right", lineBreak: false });
+      .text(`${requester.fullName} · ${requester.role}`, 40, 38, { width: doc.page.width - 80, align: "right", lineBreak: false });
 
     doc.fillColor("#0b1220").font("Helvetica").y = 100;
 

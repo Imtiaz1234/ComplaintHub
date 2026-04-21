@@ -1794,6 +1794,41 @@ textarea { resize: vertical; min-height: 92px; }
 
 .login-method-tabs { margin: 8px 0 10px; }
 
+.password-field {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.password-field input {
+  padding-right: 72px !important;
+  width: 100%;
+}
+
+.password-toggle {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+  padding: 4px 10px;
+  height: auto;
+  width: auto;
+  min-width: 56px;
+  font-size: 12px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--brand-600, #2563eb);
+  border: 1px solid var(--ink-200, #e2e8f0);
+  border-radius: 6px;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.password-toggle:hover {
+  background: var(--ink-50, #f8fafc);
+}
+
 .otp-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
